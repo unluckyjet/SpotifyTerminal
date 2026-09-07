@@ -91,3 +91,10 @@ test('fullscreen artwork grows and hides idle controls while retaining the progr
     ui.interact();ui.draw(track,artwork,false,'');await t.renderOnce();expect(ui.hits).toHaveLength(3);
   }finally{t.renderer.destroy();}
 });
+
+test('theme transitions reach exact endpoints and clamp progress',async()=>{
+  const {albumTheme,blendTheme}=await import('./theme');
+  const a=albumTheme(Buffer.from([255,0,0])),b=albumTheme(Buffer.from([0,0,255]));
+  expect(blendTheme(a,b,-1)).toEqual(a);expect(blendTheme(a,b,2)).toEqual(b);
+  expect(blendTheme(a,b,0.5)).not.toEqual(a);expect(blendTheme(a,b,0.5)).not.toEqual(b);
+});

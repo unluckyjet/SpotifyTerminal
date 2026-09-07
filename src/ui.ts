@@ -1,6 +1,6 @@
 import { TextRenderable, StyledText, RGBA, type CliRenderer } from '@opentui/core';
 import type {Track, Command} from './spotify';
-import {albumTheme} from './theme';
+import {albumTheme,blendTheme} from './theme';
 import {CoverRenderable, type Artwork} from './cover';
 import type {ArtworkOverlay,OverlayLayout} from './overlay';
 export const clock=(s:number)=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.floor(Math.max(0,s))%60).padStart(2,'0')}`;
@@ -10,23 +10,38 @@ export class PlayerUI {
   private theme=albumTheme();
   rows: TextRenderable[]=[]; hits: {x:number;y:number;w:number;command:Command}[]=[];
   readonly cover: CoverRenderable;
+  readonly previousCover:CoverRenderable;
+  transitions=false;
+  private lastArtwork?:Artwork;
+  private transitionStart=0;
+  private fromTheme=albumTheme();
   fullscreen=false;
   gallery?:{index:number;total:number};
   lastInteraction=Date.now();
   interact(){this.lastInteraction=Date.now();}
   toggleFullscreen(){this.fullscreen=!this.fullscreen;this.interact();}
   constructor(public renderer:CliRenderer, public action:(c:Command)=>void, private overlay?:ArtworkOverlay) {
-    this.cover=new CoverRenderable(renderer,{id:'album-cover',position:'absolute',fit:'fit',protocol:'auto',zIndex:1,visible:false});
+    this.previousCover=new CoverRenderable(renderer,{id:'previous-cover',position:'absolute',fit:'fit',protocol:'auto',zIndex:1,visible:false});renderer.root.add(this.previousCover);
+    this.cover=new CoverRenderable(renderer,{id:'album-cover',position:'absolute',fit:'fit',protocol:'auto',zIndex:2,visible:false,buffered:true});
     renderer.root.add(this.cover);
   }
   draw(track:Track, artwork:Artwork|undefined, demo:boolean, status:string) {
     const W=this.renderer.width,H=this.renderer.height;
     const fullscreen=this.fullscreen&&!this.gallery;
+    artwork=artwork??(this.transitions?this.lastArtwork:undefined);
     const pixels=artwork?.palette;
-    if(this.cover.source!==artwork?.encoded)this.cover.source=artwork?.encoded;
+    if(this.cover.source!==artwork?.encoded){
+      if(this.transitions&&this.lastArtwork&&artwork){this.previousCover.source=this.lastArtwork.encoded;this.transitionStart=Date.now();this.fromTheme=this.theme;}
+      this.cover.source=artwork?.encoded;
+    }
+    if(artwork)this.lastArtwork=artwork;
     this.cover.visible=false;
     if(pixels!==this.themePixels){this.themePixels=pixels;this.theme=albumTheme(pixels);}
-    const colors=this.theme;
+    const transitionProgress=this.transitions?Math.min(1,(Date.now()-this.transitionStart)/400):1;
+    const colors=blendTheme(this.fromTheme,this.theme,transitionProgress);
+    this.previousCover.visible=false;
+    this.cover.opacity=transitionProgress;
+    if(transitionProgress===1)this.previousCover.source=undefined;
     const grid:Cell[][]=Array.from({length:H},()=>Array.from({length:W},()=>({c:' ',f:colors.text,b:colors.bg})));
     const put=(x:number,y:number,s:string,f=colors.text,b=colors.bg)=>{for(const c of s){if(grid[y]?.[x])grid[y][x]={c,f,b};x++;}};
     this.hits=[];
@@ -54,6 +69,8 @@ export class PlayerUI {
       this.cover.width=artW;
       this.cover.height=artH;
       this.cover.visible=!!artwork;
+      this.previousCover.left=ax;this.previousCover.top=ay;this.previousCover.width=artW;this.previousCover.height=artH;
+      this.previousCover.visible=!!artwork&&transitionProgress<1;
       if(this.cover.loadError){
         centered('Album cover unavailable',ay+Math.floor(artH/2),colors.muted);
       }
@@ -84,6 +101,7 @@ export class PlayerUI {
       for(const p of grid[y]) {const prev=chunks.at(-1);if(prev&&prev.fc===p.f&&prev.bc===p.b)prev.text+=p.c;else chunks.push({__isChunk:true,text:p.c,fg:RGBA.fromHex(p.f),bg:RGBA.fromHex(p.b),fc:p.f,bc:p.b});}
       this.rows[y].width=W;this.rows[y].content=new StyledText(chunks);
     }
+    this.overlay?.setTransitions(this.transitions);
     this.overlay?.update(artwork,layout,this.cover.effectiveProtocol==='blocks');
   }
 }

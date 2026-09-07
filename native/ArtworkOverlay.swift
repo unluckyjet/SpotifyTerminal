@@ -22,6 +22,7 @@ struct Frame: Codable {
     var systemMedia: Bool? = nil
     var playbackImage:String?=nil
     var clearPlaybackImage:Bool?=nil
+    var transitions:Bool?=nil
 }
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -57,7 +58,13 @@ func coverRectangle(bar: CGRect, frame: Frame) -> CGRect? {
 }
 
 final class PhotoView: NSView {
-    var image: NSImage? { didSet { needsDisplay = true } }
+    var transitions=false
+    var previous:NSImage?
+    var transitionStarted=Date.distantPast
+    var image: NSImage? { didSet {
+        if transitions,image != nil,oldValue != nil {previous=oldValue;transitionStarted=Date()} else {previous=nil}
+        needsDisplay=true
+    }}
     var backdrop = NSColor.black { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
         backdrop.setFill(); bounds.fill()
@@ -66,7 +73,10 @@ final class PhotoView: NSView {
         let size = CGSize(width:image.size.width*scale,height:image.size.height*scale)
         let target = CGRect(x:(bounds.width-size.width)/2,y:(bounds.height-size.height)/2,width:size.width,height:size.height)
         NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(in:target,from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil)
+        let fraction=transitions ? min(1,Date().timeIntervalSince(transitionStarted)/0.4) : 1
+        if fraction<1,let previous {previous.draw(in:target,from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil)}
+        image.draw(in:target,from:.zero,operation:.sourceOver,fraction:fraction,respectFlipped:true,hints:nil)
+        if fraction>=1 {previous=nil}
     }
 }
 final class ArtPanel: NSPanel {
@@ -193,6 +203,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
         Timer.scheduledTimer(withTimeInterval:0.1,repeats:true) { [weak self] _ in self?.tick() }
     }
     func receive(_ update: Frame) {
+        photo.transitions=update.transitions==true
         if frame?.key != update.key {
             panel.orderOut(nil)
             geometryChanged=Date()
@@ -218,6 +229,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
     }
     func hide(_ reason: String) { panel.orderOut(nil); report(false,reason) }
     func tick() {
+        if photo.previous != nil {photo.needsDisplay=true}
         guard kill(parent,0)==0 else { NSApp.terminate(nil); return }
         guard let frame,frame.enabled,Date().timeIntervalSince(updated)<1.5,photo.image != nil else { hide("idle");return }
         guard Date().timeIntervalSince(geometryChanged)>0.15 else { hide("settling");return }

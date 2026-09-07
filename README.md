@@ -32,6 +32,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | Space | Play / pause |
 | Tab | Toggle fullscreen artwork |
 | H | Browse local listening history |
+| T | Toggle optional cover/color transitions |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |
 | + / - | Volume |
@@ -65,6 +66,10 @@ Press **Tab** or launch with `--fullscreen` to give the cover most of the window
 ## Listening history
 
 Press **H** to browse the most recent 200 distinct tracks with **Left/Right**. Press **H** or **Escape** to return to the player. Music keeps playing while browsing. Metadata and album covers are saved only on your computer under `~/Library/Application Support/Spotterminal` (or `$XDG_DATA_HOME/Spotterminal`). Set `SPOTTERMINAL_DATA_DIR` to choose another location. Demo playback is not recorded.
+
+## Transitions
+
+Transitions are off by default. Press **T** or use `--transitions` for a short crossfade between album covers and their color themes. The native artwork overlay uses the same setting.
 
 ## Development
 

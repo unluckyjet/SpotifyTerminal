@@ -23,3 +23,13 @@ export function albumTheme(pixels?:Buffer) {
   }
   return {bg:hex(mix(dominant,0,0.91)),accent:hex(mix(dominant,255,0.48)),text:hex(mix(dominant,255,0.92)),muted:hex(mix(dominant,255,0.60)),surface:hex(mix(dominant,0,0.68))};
 }
+
+export type AlbumTheme=ReturnType<typeof albumTheme>;
+export function blendTheme(from:AlbumTheme,to:AlbumTheme,progress:number):AlbumTheme{
+  const t=Math.max(0,Math.min(1,progress));
+  return Object.fromEntries(Object.keys(to).map(key=>{
+    const k=key as keyof AlbumTheme;
+    const rgb=[1,3,5].map(i=>Math.round(parseInt(from[k].slice(i,i+2),16)*(1-t)+parseInt(to[k].slice(i,i+2),16)*t));
+    return [k,hex(rgb as RGB)];
+  })) as AlbumTheme;
+}
