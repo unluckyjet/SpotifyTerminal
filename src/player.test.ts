@@ -76,3 +76,18 @@ test('fallback averages fine detail instead of dropping it during downsampling',
     expect(colors.some(c=>c.toInts().slice(0,3).every(v=>Math.abs(v-188)<=2))).toBe(true);
   }finally{t.renderer.destroy();source.dispose();}
 });
+
+test('fullscreen artwork grows and hides idle controls while retaining the progress anchor',async()=>{
+  const t=await createTestRenderer({width:100,height:40});
+  try{
+    const ui=new PlayerUI(t.renderer,()=>{}),track=await new Demo().read();
+    const sharp=(await import('sharp')).default;
+    const artwork={encoded:await sharp({create:{width:64,height:64,channels:3,background:'#6688aa'}}).png().toBuffer(),palette:Buffer.from([102,136,170])};
+    ui.draw(track,artwork,false,'');await t.renderOnce();const normal=ui.cover.height;
+    ui.toggleFullscreen();ui.lastInteraction=Date.now()-5000;
+    ui.draw(track,artwork,false,'');await t.renderOnce();
+    expect(ui.cover.height).toBeGreaterThan(normal);expect(ui.hits).toHaveLength(0);
+    expect(t.captureCharFrame()).not.toContain(track.artist);expect(t.captureCharFrame()).toContain('────');
+    ui.interact();ui.draw(track,artwork,false,'');await t.renderOnce();expect(ui.hits).toHaveLength(3);
+  }finally{t.renderer.destroy();}
+});

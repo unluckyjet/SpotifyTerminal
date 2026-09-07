@@ -30,6 +30,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | Control | Action |
 | --- | --- |
 | Space | Play / pause |
+| Tab | Toggle fullscreen artwork |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |
 | + / - | Volume |
@@ -55,6 +56,10 @@ spotterminal
 Skip `npm run build:overlay` and run `spotterminal --no-overlay` if you only want the terminal renderer. The native `.app` is built locally for your Mac; it is not stored in the repository.
 
 Ensure `~/.local/bin` is on PATH. Keep this project folder in place while its command is linked. Demo mode can run on other OpenTUI-supported operating systems.
+
+## Fullscreen artwork
+
+Press **Tab** or launch with `--fullscreen` to give the cover most of the window. Transport controls fade from view after a short idle period and return on keyboard or mouse activity. A thin progress line stays visible. The image remains static.
 
 ## Development
 
