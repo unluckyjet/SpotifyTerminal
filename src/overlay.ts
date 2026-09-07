@@ -1,6 +1,8 @@
 import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import type {Artwork} from './cover';
+import type {Track} from './spotify';
+import {nativeCommand,type NativeCommand} from './native-commands';
 
 export type OverlayLayout = {
   cover: {x:number;y:number;width:number;height:number};
@@ -21,8 +23,10 @@ export class ArtworkOverlay {
   private stopped=false;
   private reply:Reply={visible:false,reason:'starting',key:''};
   private failure='';
+  private track?:Track;
+  setTrack(track:Track){this.track=track;}
 
-  constructor(enabled:boolean){
+  constructor(enabled:boolean,private onCommand?:(command:NativeCommand)=>void,private options:{overlay?:boolean;menuBar?:boolean}={}){
     if(!enabled||process.platform!=='darwin'){this.failure='disabled';return;}
     if(!existsSync(overlayExecutable)){this.failure='missing';return;}
     try{
@@ -40,7 +44,7 @@ export class ArtworkOverlay {
         let index:number;
         while((index=pending.indexOf('\n'))>=0){
           const line=pending.slice(0,index);pending=pending.slice(index+1);
-          try{const result=JSON.parse(line);if(typeof result.visible==='boolean'&&typeof result.reason==='string'&&typeof result.key==='string'){this.reply=result;this.lastReply=Date.now();}}catch{}
+          try{const result=JSON.parse(line);const command=nativeCommand(result);if(command){this.onCommand?.(command);continue;}if(typeof result.visible==='boolean'&&typeof result.reason==='string'&&typeof result.key==='string'){this.reply=result;this.lastReply=Date.now();}}catch{}
         }
       }
     }catch{ /* A failed helper leaves the terminal renderer active. */ }
@@ -51,13 +55,13 @@ export class ArtworkOverlay {
     if(!this.process||this.stopped)return false;
     const changedImage=this.lastImage!==artwork?.encoded;
     if(changedImage){this.lastImage=artwork?.encoded;this.generation++;}
-    const enabled=!!artwork&&!!layout&&wantsOverlay;
+    const enabled=!!artwork&&!!layout&&wantsOverlay&&this.options.overlay!==false;
     const key=JSON.stringify([this.generation,enabled,layout]);
     const now=Date.now();
     if(key!==this.lastKey||now-this.lastSent>400){
       this.lastKey=key;this.lastSent=now;
       const empty={cover:{x:0,y:0,width:0,height:0},anchor:{text:'',x:0,y:0},background:'#000000'};
-      const payload={key,enabled,token:this.token,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
+      const payload={key,enabled,token:this.token,track:this.track,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
       try{const stdin=this.process.stdin;if(stdin&&typeof stdin!=='number'){stdin.write(JSON.stringify(payload)+'\n');stdin.flush();}}catch{this.failure='stopped';}
     }
     return this.reply.visible&&this.reply.key===key&&now-this.lastReply<1500;

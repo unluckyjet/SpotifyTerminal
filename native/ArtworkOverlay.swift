@@ -3,6 +3,10 @@ import ApplicationServices
 
 struct CellRect: Codable { var x: Double; var y: Double; var width: Double; var height: Double }
 struct Anchor: Codable { var text: String; var x: Double; var y: Double }
+struct NowPlaying: Codable {
+    var id:String; var name:String; var artist:String; var album:String
+    var duration:Double; var position:Double; var playing:Bool; var volume:Int; var shuffle:Bool
+}
 struct Frame: Codable {
     var key: String
     var enabled: Bool
@@ -11,6 +15,9 @@ struct Frame: Codable {
     var cover: CellRect
     var anchor: Anchor
     var background: String
+    var track: NowPlaying? = nil
+    var menuBar: Bool? = nil
+    var clearImage: Bool? = nil
 }
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -69,10 +76,55 @@ final class Overlay: NSObject, NSApplicationDelegate {
     var updated = Date.distantPast
     var geometryChanged = Date.distantPast
     let parent: pid_t = getppid()
+    var statusItem: NSStatusItem?
+    let statusMenu=NSMenu()
+    let titleItem=NSMenuItem(title:"Spotterminal",action:nil,keyEquivalent:"")
+    let artistItem=NSMenuItem(title:"Connecting…",action:nil,keyEquivalent:"")
+    let albumItem=NSMenuItem(title:"",action:nil,keyEquivalent:"")
+    let playItem=NSMenuItem(title:"Play / Pause",action:#selector(menuAction(_:)),keyEquivalent:"")
+    let shuffleItem=NSMenuItem(title:"Shuffle",action:#selector(menuAction(_:)),keyEquivalent:"")
+
+    func command(_ name:String) {
+        guard let data=try? JSONSerialization.data(withJSONObject:["command":name]),let text=String(data:data,encoding:.utf8) else { return }
+        print(text);fflush(stdout)
+    }
+    @objc func menuAction(_ item:NSMenuItem) { if let action=item.representedObject as? String { command(action) } }
+    func menuItem(_ title:String,_ command:String)->NSMenuItem {
+        let item=NSMenuItem(title:title,action:#selector(menuAction(_:)),keyEquivalent:"")
+        item.target=self;item.representedObject=command
+        return item
+    }
+    func configureMenu() {
+        statusMenu.autoenablesItems=false
+        for item in [titleItem,artistItem,albumItem] { item.isEnabled=false;statusMenu.addItem(item) }
+        statusMenu.addItem(.separator())
+        playItem.target=self;playItem.representedObject="toggle";statusMenu.addItem(playItem)
+        statusMenu.addItem(menuItem("Previous Track","previous"));statusMenu.addItem(menuItem("Next Track","next"))
+        shuffleItem.target=self;shuffleItem.representedObject="shuffle";statusMenu.addItem(shuffleItem)
+        statusMenu.addItem(.separator());statusMenu.addItem(menuItem("Volume Up","louder"));statusMenu.addItem(menuItem("Volume Down","quieter"))
+        statusMenu.addItem(.separator());statusMenu.addItem(menuItem("Quit Spotterminal","quit"))
+    }
+    func updateMenu(_ state:Frame) {
+        if state.menuBar==false {
+            if let item=statusItem { NSStatusBar.system.removeStatusItem(item);statusItem=nil }
+            return
+        }
+        if statusItem==nil {
+            let item=NSStatusBar.system.statusItem(withLength:NSStatusItem.squareLength)
+            item.button?.image=NSImage(systemSymbolName:"music.note",accessibilityDescription:"Spotterminal")
+            item.button?.image?.isTemplate=true;item.menu=statusMenu;statusItem=item
+        }
+        guard let track=state.track else { return }
+        titleItem.title=track.name;artistItem.title=track.artist;albumItem.title=track.album
+        playItem.title=track.playing ? "Pause" : "Play"
+        shuffleItem.state=track.shuffle ? .on : .off
+        statusItem?.button?.toolTip="\(track.name) — \(track.artist)"
+    }
     let allowed = Set(["com.apple.Terminal","com.googlecode.iterm2","com.mitchellh.ghostty","net.kovidgoyal.kitty","org.wezfurlong.wezterm"])
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        configureMenu()
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(),0.15)
         panel.contentView=photo; panel.isOpaque=true; panel.hasShadow=false
         panel.ignoresMouseEvents=true; panel.hidesOnDeactivate=false
@@ -97,6 +149,8 @@ final class Overlay: NSObject, NSApplicationDelegate {
             photo.image=Data(base64Encoded:encoded).flatMap { NSImage(data:$0) }
         }
 
+        if update.clearImage==true { photo.image=nil }
+        updateMenu(update)
         let value=UInt32(update.background.dropFirst(),radix:16) ?? 0
         photo.backdrop=NSColor(srgbRed:Double((value>>16)&255)/255,green:Double((value>>8)&255)/255,blue:Double(value&255)/255,alpha:1)
         frame=update; updated=Date(); tick()

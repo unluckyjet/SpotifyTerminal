@@ -1,7 +1,7 @@
 export type Track = { id: string; name: string; artist: string; album: string; artwork: string; duration: number; position: number; playing: boolean; volume: number; shuffle: boolean };
-export type Command = 'play'|'toggle'|'next'|'previous'|'shuffle'|'forward'|'back'|'louder'|'quieter';
+export type Command = 'play'|'pause'|'toggle'|'next'|'previous'|'shuffle'|'forward'|'back'|'louder'|'quieter';
 const commands: Record<Command,string> = {
-  play: 'play', toggle: 'playpause', next: 'next track', previous: 'previous track',
+  play: 'play', pause:'pause', toggle: 'playpause', next: 'next track', previous: 'previous track',
   shuffle: 'set shuffling to not shuffling',
   forward: 'set player position to (player position + 10)',
   back: 'set player position to (max of {0, player position - 10})',
@@ -29,5 +29,5 @@ export class Demo {
   track: Track = {id:'demo',name:'Go To Town',artist:'Doja Cat',album:'Amala • Demo tape',artwork:'',duration:217,position:15,playing:true,volume:65,shuffle:false};
   last = Date.now();
   async read() { const now=Date.now(); if(this.track.playing) this.track.position=(this.track.position+(now-this.last)/1000)%this.track.duration; this.last=now; return {...this.track}; }
-  async command(c: Command) { await this.read(); if(c==='toggle') this.track.playing=!this.track.playing; if(c==='play') this.track.playing=true; if(c==='shuffle') this.track.shuffle=!this.track.shuffle; if(c==='next'||c==='previous') {this.track.name=this.track.name==='Go To Town'?'Roll With Us':'Go To Town';this.track.position=0;} if(c==='forward'||c==='back') this.track.position=Math.max(0,Math.min(this.track.duration,this.track.position+(c==='forward'?10:-10))); if(c==='louder'||c==='quieter')this.track.volume=Math.max(0,Math.min(100,this.track.volume+(c==='louder'?5:-5))); }
+  async command(c: Command) { await this.read(); if(c==='toggle') this.track.playing=!this.track.playing; if(c==='play') this.track.playing=true; if(c==='pause') this.track.playing=false; if(c==='shuffle') this.track.shuffle=!this.track.shuffle; if(c==='next'||c==='previous') {this.track.name=this.track.name==='Go To Town'?'Roll With Us':'Go To Town';this.track.position=0;} if(c==='forward'||c==='back') this.track.position=Math.max(0,Math.min(this.track.duration,this.track.position+(c==='forward'?10:-10))); if(c==='louder'||c==='quieter')this.track.volume=Math.max(0,Math.min(100,this.track.volume+(c==='louder'?5:-5))); }
 }

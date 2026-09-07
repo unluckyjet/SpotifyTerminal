@@ -2,6 +2,10 @@
 
 A Spotify desktop remote for macOS, built with Anomaly's OpenTUI. Centered song, album, and artist names above a clean album cover, a thin progress line, timestamps, and three evenly spaced playback controls. The background, text, and accent colors are derived from the current album cover.
 
+## Menu bar
+
+While Spotterminal is running, its music-note icon appears in the macOS menu bar. Open it for current track details, play/pause, previous/next, shuffle, volume, and quit. These controls work without Accessibility permission. The native helper must be built (`npm run build:overlay`). Use `--no-menubar` to hide the icon; `--no-overlay` only disables the artwork overlay.
+
 ## Run
 
 ```sh
