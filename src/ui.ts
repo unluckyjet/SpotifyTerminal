@@ -4,6 +4,15 @@ import {albumTheme,blendTheme} from './theme';
 import {CoverRenderable, type Artwork} from './cover';
 import {lyricIndex,type LyricLine} from './lyrics';
 import type {ArtworkOverlay,OverlayLayout} from './overlay';
+import {formatRemaining} from './remaining';
+import {progressLabel} from './progress';
+import {seekFromClick} from './seek-click';
+import {layoutMode} from './compact';
+import {dimTheme} from './night-mode';
+import {highContrast} from './contrast';
+import {monoTheme} from './mono';
+import {idleOpacity} from './idle';
+import {deuteranopiaTheme} from './colorblind';
 export const clock=(s:number)=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.floor(Math.max(0,s))%60).padStart(2,'0')}`;
 type Cell={c:string;f:string;b:string};
 export type Dialog={title:string;input?:string;lines?:string[];footer:string;selected?:number};
@@ -11,6 +20,13 @@ export class PlayerUI {
   private themePixels?:Buffer;
   private theme=albumTheme();
   rows: TextRenderable[]=[]; hits: {x:number;y:number;w:number;command:Command}[]=[];
+  seekBar?:{x:number;y:number;width:number;duration:number};
+  onSeek?:(position:number)=>void;
+  compact=false;
+  night=false;
+  highContrast=false;
+  mono=false;
+  colorblind=false;
   readonly cover: CoverRenderable;
   readonly previousCover:CoverRenderable;
   transitions=false;
@@ -44,15 +60,22 @@ export class PlayerUI {
     this.cover.visible=false;
     if(pixels!==this.themePixels){this.themePixels=pixels;this.theme=albumTheme(pixels);}
     const transitionProgress=this.transitions?Math.min(1,(Date.now()-this.transitionStart)/400):1;
-    const colors=blendTheme(this.fromTheme,this.theme,transitionProgress);
+    let colors=blendTheme(this.fromTheme,this.theme,transitionProgress);
+    if(this.mono)colors=monoTheme(colors);
+    if(this.night)colors=dimTheme(colors);
+    if(this.colorblind)colors=deuteranopiaTheme(colors);
+    if(this.highContrast)colors=highContrast(colors);
+    const opacity=idleOpacity(this.lastInteraction);
     this.previousCover.visible=false;
-    this.cover.opacity=transitionProgress;
+    this.cover.opacity=transitionProgress*opacity;
     if(transitionProgress===1)this.previousCover.source=undefined;
     const grid:Cell[][]=Array.from({length:H},()=>Array.from({length:W},()=>({c:' ',f:colors.text,b:colors.bg})));
     const put=(x:number,y:number,s:string,f=colors.text,b=colors.bg)=>{for(const c of s){if(grid[y]?.[x])grid[y][x]={c,f,b};x++;}};
     this.hits=[];
+    this.seekBar=undefined;
     let layout:OverlayLayout|undefined;
-    if(W<32||H<16){
+    const mode=this.compact?'compact':layoutMode(W,H);
+    if(mode==='tiny'){
       put(1,1,'Resize terminal to 32 × 16.',colors.muted);
     } else {
       // Use the available terminal area for detail, respecting measured cell
@@ -61,8 +84,8 @@ export class PlayerUI {
       const sideLyrics=lyrics&&W>=90;
       const aspect=this.cover.cellAspectRatio;
       const showControls=!this.gallery&&(!fullscreen||Date.now()-this.lastInteraction<2200);
-      const artH=Math.max(1,Math.min(H-(fullscreen?7:12),Math.floor((sideLyrics?W*0.45:W-8)/aspect)));
-      const artW=Math.min(W-8,Math.round(artH*aspect));
+      const artH=mode==='compact'?0:Math.max(1,Math.min(H-(fullscreen?7:12),Math.floor((sideLyrics?W*0.45:W-8)/aspect)));
+      const artW=mode==='compact'?0:Math.min(W-8,Math.round(artH*aspect));
       const width=Math.min(W-8,Math.max(64,artW+12)),left=Math.floor((W-width)/2);
       const top=Math.max(1,Math.floor((H-artH-(fullscreen?6:10))/2));
       const centered=(text:string,y:number,color=colors.text)=>{
@@ -76,7 +99,7 @@ export class PlayerUI {
       this.cover.top=ay;
       this.cover.width=artW;
       this.cover.height=artH;
-      this.cover.visible=!!artwork&&(!lyrics||sideLyrics);
+      this.cover.visible=mode!=='compact'&&!!artwork&&(!lyrics||sideLyrics);
       this.previousCover.left=ax;this.previousCover.top=ay;this.previousCover.width=artW;this.previousCover.height=artH;
       this.previousCover.visible=this.cover.visible&&transitionProgress<1;
       if(this.cover.loadError){
@@ -87,9 +110,15 @@ export class PlayerUI {
       const progress=Math.round(Math.min(1,Math.max(0,track.position/Math.max(track.duration,1)))*width);
       put(left,barY,'─'.repeat(progress),colors.accent);
       put(left+progress,barY,'─'.repeat(width-progress),colors.muted);
-      if(showControls)put(left,controlY,clock(track.position),colors.muted);
+      this.seekBar={x:left,y:barY,width,duration:track.duration};
       const duration=clock(track.duration);
-      if(showControls)put(left+width-duration.length,controlY,duration,colors.muted);
+      const remain=formatRemaining(track.position,track.duration);
+      const percent=progressLabel(track.position,track.duration);
+      if(showControls){
+        put(left,controlY,`${clock(track.position)} ${percent}`,colors.muted);
+        put(left+width-duration.length-remain.length-1,controlY,remain,colors.muted);
+        put(left+width-duration.length,controlY,duration,colors.muted);
+      }
       const button=(x:number,label:string,c:Command)=>{
         put(x,controlY,label);
         this.hits.push({x,y:controlY,w:label.length,command:c});
@@ -108,7 +137,7 @@ export class PlayerUI {
       if(note)put(left,Math.min(H-1,controlY+2),note.replace(/[\r\n\x1b]/g,' ').slice(0,width),colors.muted);
     }
     if(this.dialog){
-      this.cover.visible=false;this.previousCover.visible=false;layout=undefined;this.hits=[];
+      this.cover.visible=false;this.previousCover.visible=false;layout=undefined;this.hits=[];this.seekBar=undefined;
       for(const row of grid)for(const cell of row){cell.c=' ';cell.f=colors.text;cell.b=colors.bg;}
       const width=Math.min(70,W-4),left=Math.max(1,Math.floor((W-width)/2)),top=Math.max(1,Math.floor((H-12)/2));
       put(left,top,this.dialog.title.slice(0,width),colors.accent);
@@ -121,7 +150,7 @@ export class PlayerUI {
     // source and layout; it also stays available while the app is in background.
     while(this.rows.length>H)this.rows.pop()!.destroy();
     for(let y=0;y<H;y++){
-      if(!this.rows[y]){const row=new TextRenderable(this.renderer,{id:`row-${y}`,position:'absolute',left:0,top:y,width:W,height:1,onMouseMove:()=>this.interact(),onMouseDown:e=>{this.interact();const h=this.hits.find(h=>e.y===h.y&&e.x>=h.x&&e.x<h.x+h.w);if(h)this.action(h.command);}});this.rows.push(row);this.renderer.root.add(row);}
+      if(!this.rows[y]){const row=new TextRenderable(this.renderer,{id:`row-${y}`,position:'absolute',left:0,top:y,width:W,height:1,onMouseMove:()=>this.interact(),onMouseDown:e=>{this.interact();const h=this.hits.find(h=>e.y===h.y&&e.x>=h.x&&e.x<h.x+h.w);if(h)this.action(h.command);else if(this.seekBar&&e.y===this.seekBar.y){const position=seekFromClick(e.x,{x:this.seekBar.x,width:this.seekBar.width},this.seekBar.duration);if(position!==undefined)this.onSeek?.(position);}}});this.rows.push(row);this.renderer.root.add(row);}
       const chunks:any[]=[];
       for(const p of grid[y]) {const prev=chunks.at(-1);if(prev&&prev.fc===p.f&&prev.bc===p.b)prev.text+=p.c;else chunks.push({__isChunk:true,text:p.c,fg:RGBA.fromHex(p.f),bg:RGBA.fromHex(p.b),fc:p.f,bc:p.b});}
       this.rows[y].width=W;this.rows[y].content=new StyledText(chunks);

@@ -1,0 +1,28 @@
+import {test,expect} from 'bun:test';
+import {contrastRatio,highContrast} from './contrast';
+test('contrastRatio uses WCAG luminance; highContrast lifts a low-contrast theme to 7:1',()=>{
+  expect(contrastRatio('#ffffff','#000000')).toBe(21);
+  expect(contrastRatio('#000000','#ffffff')).toBe(21);
+  expect(contrastRatio('#fff','#000')).toBe(21);
+  expect(contrastRatio('#ffffff','#ffffff')).toBe(1);
+  const low={bg:'#777777',text:'#8a8a8a',accent:'#808080',muted:'#7f7f7f',surface:'#6a6a6a'};
+  const copy={...low};
+  const hi=highContrast(low);
+  expect(low).toEqual(copy);
+  expect(contrastRatio(hi.text,hi.bg)).toBeGreaterThanOrEqual(7);
+  expect(contrastRatio(hi.accent,hi.bg)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(hi.muted,hi.bg)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(hi.muted,hi.bg)).toBeLessThan(contrastRatio(hi.text,hi.bg));
+  const expectedBg=contrastRatio(low.text,'#000000')>=contrastRatio(low.text,'#ffffff')?'#000000':'#ffffff';
+  expect(hi.bg).toBe(expectedBg);
+  expect(hi.text).toBe(expectedBg==='#000000'?'#ffffff':'#000000');
+  expect(hi.surface).toBe('#6a6a6a');
+  const [r,g,b]=[1,3,5].map(i=>parseInt(hi.accent.slice(i,i+2),16));
+  expect(Math.max(r,g,b)-Math.min(r,g,b)).toBeGreaterThan(80);
+  const dark=highContrast({bg:'#444444',text:'#222222',accent:'#3a3a3a',muted:'#2c2c2c'});
+  expect(dark.bg).toBe('#ffffff');expect(dark.text).toBe('#000000');
+  expect(contrastRatio(dark.text,dark.bg)).toBeGreaterThanOrEqual(7);
+  expect(contrastRatio(dark.accent,dark.bg)).toBeGreaterThanOrEqual(4.5);
+  const ok={bg:'#000000',text:'#ffffff',accent:'#ffcc00',muted:'#cccccc'};
+  expect(highContrast(ok)).toEqual(ok);
+});
