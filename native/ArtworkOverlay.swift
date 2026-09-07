@@ -20,6 +20,8 @@ struct Frame: Codable {
     var menuBar: Bool? = nil
     var clearImage: Bool? = nil
     var systemMedia: Bool? = nil
+    var playbackImage:String?=nil
+    var clearPlaybackImage:Bool?=nil
 }
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -78,6 +80,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
     var updated = Date.distantPast
     var geometryChanged = Date.distantPast
     let parent: pid_t = getppid()
+    var playbackImage:NSImage?
     var remoteTargets:[(MPRemoteCommand,Any)]=[]
     var mediaActive=false
     var lastMediaUpdate=Date.distantPast
@@ -120,7 +123,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
             MPNowPlayingInfoPropertyPlaybackRate:track.playing ? 1.0 : 0.0,MPNowPlayingInfoPropertyDefaultPlaybackRate:1.0,
             MPNowPlayingInfoPropertyExternalContentIdentifier:track.id
         ]
-        if let image=photo.image {info[MPMediaItemPropertyArtwork]=MPMediaItemArtwork(boundsSize:image.size) { _ in image }}
+        if let image=playbackImage {info[MPMediaItemPropertyArtwork]=MPMediaItemArtwork(boundsSize:image.size) { _ in image }}
         let center=MPNowPlayingInfoCenter.default();center.nowPlayingInfo=info
         center.playbackState=track.playing ? .playing : .paused
     }
@@ -199,6 +202,8 @@ final class Overlay: NSObject, NSApplicationDelegate {
         }
 
         if update.clearImage==true { photo.image=nil }
+        if let encoded=update.playbackImage {playbackImage=Data(base64Encoded:encoded).flatMap {NSImage(data:$0)}}
+        if update.clearPlaybackImage==true {playbackImage=nil}
         updateMenu(update)
         updateMedia(update)
         let value=UInt32(update.background.dropFirst(),radix:16) ?? 0

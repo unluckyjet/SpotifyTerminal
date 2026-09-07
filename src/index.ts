@@ -4,10 +4,12 @@ import {Spotify,Demo,type Command,type Track} from './spotify';
 import {PlayerUI} from './ui';
 import type {Artwork} from './cover';
 import {ArtworkOverlay} from './overlay';
+import {ListeningHistory} from './history';
 const args=process.argv.slice(2);
-if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\nTab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
+if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\nH: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
 const demo=args.includes('--demo');
 if(!demo&&process.platform!=='darwin'){console.error('Live playback requires Spotify for macOS. Try spotterminal --demo.');process.exit(1);}
+const history=new ListeningHistory();await history.load();
 const backend=demo?new Demo():new Spotify();
 const renderer=await createCliRenderer({exitOnCtrlC:false,useMouse:true});
 let track:Track={id:'',name:'Connecting to Spotify…',artist:'',album:'',artwork:'',duration:0,position:0,playing:false,volume:0,shuffle:false};
@@ -29,16 +31,28 @@ async function artwork(url:string){
   }
 }
 async function poll(){if(busy||closed)return;busy=true;try{track=await backend.read();status='';void artwork(track.artwork);}catch(e){status=e instanceof Error?e.message:String(e);track.playing=false;}finally{busy=false;}}
+let historyIndex=0,historyVersion=0,historyCover:Artwork|undefined;
+let historyTrack:Track|undefined;
+async function browseHistory(delta=0){
+  const version=++historyVersion;
+  if(!history.entries.length){status='Your listening history is empty';return;}
+  historyIndex=(historyIndex+delta+history.entries.length)%history.entries.length;
+  const entry=history.entries[historyIndex];
+  historyTrack={...track,...entry,playing:false,position:0,duration:0};historyCover=undefined;
+  ui.gallery={index:historyIndex,total:history.entries.length};
+  const encoded=await history.cover(entry);
+  if(encoded){try{const palette=await sharp(encoded).resize(32,32).removeAlpha().toColourspace('srgb').raw().toBuffer();if(version===historyVersion)historyCover={encoded,palette};}catch{status='Saved cover unavailable';}}
+}
 let queue=Promise.resolve();
 const action=(c:Command)=>{queue=queue.then(async()=>{if(closed)return;try{await backend.command(c);await poll();}catch(e){status=e instanceof Error?e.message:String(e);}});};
 const overlay=new ArtworkOverlay(true,event=>{if(event.command==='quit')quit();else if(event.command==='seek'){queue=queue.then(async()=>{try{await backend.seek(event.position);await poll();}catch(e){status=String(e);}});}else action(event.command);},{overlay:!args.includes('--no-overlay'),menuBar:!args.includes('--no-menubar'),systemMedia:args.includes('--system-media')&&!demo});
 renderer.setTerminalTitle(overlay.token);
 const ui=new PlayerUI(renderer,action,overlay);
 ui.fullscreen=args.includes('--fullscreen');
-const animation=setInterval(()=>{if(!closed){overlay.setTrack(track);ui.draw(track,cover,demo,status);}},100);
+const animation=setInterval(()=>{if(!closed){overlay.setTrack(track,cover);if(!demo)void history.record(track,cover).catch(()=>{status='Could not save listening history';});ui.draw(ui.gallery&&historyTrack?historyTrack:track,ui.gallery?historyCover:cover,demo,status);}},100);
 const polling=setInterval(()=>void poll(),1000);
 function quit(){closed=true;overlay.close();clearInterval(animation);clearInterval(polling);renderer.destroy();process.exit(0);}
-renderer.keyInput.on('keypress',key=>{ui.interact();if(key.name==='tab'){ui.toggleFullscreen();return;}if(key.name==='q'||(key.ctrl&&key.name==='c'))return quit();if(key.name==='o'){overlay.requestAccess();return;}const keys:Record<string,Command>={space:'toggle',right:'next',left:'previous',up:'forward',down:'back',s:'shuffle','+':'louder','=':'louder','-':'quieter'};const c=keys[key.name]??keys[key.sequence];if(c)action(c);});
+renderer.keyInput.on('keypress',key=>{ui.interact();if(key.name==='h'){if(ui.gallery){ui.gallery=undefined;historyVersion++;}else void browseHistory();return;}if(ui.gallery&&(key.name==='left'||key.name==='right')){void browseHistory(key.name==='right'?1:-1);return;}if(ui.gallery&&key.name==='escape'){ui.gallery=undefined;historyVersion++;return;}if(key.name==='tab'){ui.toggleFullscreen();return;}if(key.name==='q'||(key.ctrl&&key.name==='c'))return quit();if(key.name==='o'){overlay.requestAccess();return;}const keys:Record<string,Command>={space:'toggle',right:'next',left:'previous',up:'forward',down:'back',s:'shuffle','+':'louder','=':'louder','-':'quieter'};const c=keys[key.name]??keys[key.sequence];if(c)action(c);});
 process.on('SIGTERM',quit);process.on('SIGINT',quit);
 ui.draw(track,cover,demo,status);
 if(!args.includes('--no-autoplay'))action('play');else void poll();

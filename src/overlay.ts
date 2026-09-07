@@ -24,7 +24,9 @@ export class ArtworkOverlay {
   private reply:Reply={visible:false,reason:'starting',key:''};
   private failure='';
   private track?:Track;
-  setTrack(track:Track){this.track=track;}
+  private playbackArtwork?:Artwork;
+  private lastPlaybackImage?:Buffer;
+  setTrack(track:Track,artwork?:Artwork){this.track=track;this.playbackArtwork=artwork;}
 
   constructor(enabled:boolean,private onCommand?:(command:NativeCommand)=>void,private options:{overlay?:boolean;menuBar?:boolean;systemMedia?:boolean}={}){
     if(!enabled||process.platform!=='darwin'){this.failure='disabled';return;}
@@ -61,7 +63,9 @@ export class ArtworkOverlay {
     if(key!==this.lastKey||now-this.lastSent>400){
       this.lastKey=key;this.lastSent=now;
       const empty={cover:{x:0,y:0,width:0,height:0},anchor:{text:'',x:0,y:0},background:'#000000'};
-      const payload={key,enabled,token:this.token,track:this.track,systemMedia:this.options.systemMedia===true,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
+      const playbackImage=this.playbackArtwork?.encoded;
+      const changedPlayback=this.lastPlaybackImage!==playbackImage;this.lastPlaybackImage=playbackImage;
+      const payload={clearPlaybackImage:!playbackImage,...(changedPlayback&&playbackImage?{playbackImage:playbackImage.toString('base64')}:{ }),key,enabled,token:this.token,track:this.track,systemMedia:this.options.systemMedia===true,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
       try{const stdin=this.process.stdin;if(stdin&&typeof stdin!=='number'){stdin.write(JSON.stringify(payload)+'\n');stdin.flush();}}catch{this.failure='stopped';}
     }
     return this.reply.visible&&this.reply.key===key&&now-this.lastReply<1500;
