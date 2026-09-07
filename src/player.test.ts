@@ -3,6 +3,13 @@ import {createTestRenderer} from '@opentui/core/testing';
 import {PlayerUI,clock} from './ui';
 import {Demo} from './spotify';
 test('transport pauses, skips, clamps seeks and volume',async()=>{const d=new Demo();await d.command('toggle');const before=(await d.read()).position;await Bun.sleep(30);expect((await d.read()).position).toBe(before);await d.command('next');expect(d.track.position).toBe(0);await d.command('back');expect(d.track.position).toBe(0);for(let i=0;i<30;i++)await d.command('louder');expect(d.track.volume).toBe(100);await d.command('shuffle');expect(d.track.shuffle).toBe(true);expect(clock(195)).toBe('3:15');});
+test('live Spotify JXA read uses only original currentTrack fields',async()=>{
+  const {SPOTIFY_READ_JXA}=await import('./spotify');
+  expect(SPOTIFY_READ_JXA).toContain("t.id()");
+  expect(SPOTIFY_READ_JXA).toContain('t.artworkUrl()');
+  expect(SPOTIFY_READ_JXA).toContain('s.shuffling()');
+  for(const dead of ['starred','albumArtist','discNumber','trackNumber','popularity','spotifyUrl','repeating'])expect(SPOTIFY_READ_JXA).not.toContain(dead);
+});
 test('OpenTUI renders full, compact, and undersized layouts',async()=>{const t=await createTestRenderer({width:110,height:34});try{const ui=new PlayerUI(t.renderer,()=>{});const track=await new Demo().read();ui.draw(track,undefined,true,'');await t.renderOnce();let frame=t.captureCharFrame();expect(frame).toContain('0:15');expect(frame).toContain('3:37');expect(frame).not.toContain('SPOTTERMINAL');expect(ui.hits).toHaveLength(3);expect(frame).toContain('Go To Town');expect(frame).toContain('Amala • Demo tape');expect(frame).toContain('Doja Cat');expect(ui.hits[1].x-ui.hits[0].x).toBe(ui.hits[2].x-ui.hits[1].x);await Bun.write('preview.txt',frame);t.resize(70,30);ui.draw(track,undefined,true,'');await t.renderOnce();expect(t.captureCharFrame()).toContain('3:37');t.resize(24,12);ui.draw(track,undefined,true,'');await t.renderOnce();expect(t.captureCharFrame()).toContain('Resize terminal');}finally{t.renderer.destroy();}});
 
 test('clicking transport invokes its command; static layout is stable',async()=>{const t=await createTestRenderer({width:110,height:34});try{let command='';const ui=new PlayerUI(t.renderer,c=>{command=c;});const track=await new Demo().read();ui.draw(track,undefined,true,'');await t.renderOnce();const before=t.captureCharFrame();const hit=ui.hits.find(h=>h.command==='toggle')!;await t.mockMouse.click(hit.x+1,hit.y);expect(command).toBe('toggle');ui.draw(track,undefined,true,'');await t.renderOnce();expect(t.captureCharFrame()).toBe(before);}finally{t.renderer.destroy();}});

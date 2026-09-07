@@ -1,4 +1,5 @@
-export type Track = { id: string; name: string; artist: string; album: string; artwork: string; duration: number; position: number; playing: boolean; volume: number; shuffle: boolean };
+export type Track = { id: string; name: string; artist: string; album: string; artwork: string; duration: number; position: number; playing: boolean; volume: number; shuffle: boolean; repeating?: boolean; albumArtist?: string; discNumber?: number; trackNumber?: number; popularity?: number; starred?: boolean; spotifyUrl?: string };
+export const SPOTIFY_READ_JXA = `const s = Application('com.spotify.client'); const t = s.currentTrack(); JSON.stringify({id:t.id(),name:t.name(),artist:t.artist(),album:t.album(),artwork:t.artworkUrl(),duration:t.duration()/1000,position:s.playerPosition(),playing:s.playerState()==='playing',volume:s.soundVolume(),shuffle:s.shuffling()});`;
 export type Command = 'play'|'pause'|'toggle'|'next'|'previous'|'shuffle'|'forward'|'back'|'louder'|'quieter';
 const commands: Record<Command,string> = {
   play: 'play', pause:'pause', toggle: 'playpause', next: 'next track', previous: 'previous track',
@@ -22,18 +23,48 @@ export class Spotify {
     const track=await this.read();
     return osa(`tell application "Spotify" to set player position to ${Math.min(position,track.duration).toFixed(3)}`);
   }
+  async setVolume(volume:number){
+    const v=Math.max(0,Math.min(100,Math.round(volume)));
+    return osa(`tell application "Spotify" to set sound volume to ${v}`);
+  }
+  async setRepeating(on:boolean){
+    return osa(`tell application "Spotify" to set repeating to ${on?'true':'false'}`);
+  }
+  async playUri(id:string,_extra?:{name?:string;artist?:string;album?:string}){
+    const raw=id.trim();
+    const uri=raw.startsWith('spotify:')?raw:raw.includes('track:')?`spotify:track:${raw.slice(raw.indexOf('track:')+6)}`:`spotify:track:${raw}`;
+    const safe=uri.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+    return osa(`tell application "Spotify" to play track "${safe}"`);
+  }
   async command(command: Command) {
     if(command === 'back') return osa('tell application "Spotify"\nset player position to my clampPosition(player position - 10)\nend tell\non clampPosition(p)\nif p < 0 then return 0\nreturn p\nend clampPosition');
     return osa(`tell application "Spotify" to ${commands[command]}`);
   }
   async read(): Promise<Track> {
-    return JSON.parse(await osa(`const s = Application('com.spotify.client'); const t = s.currentTrack(); JSON.stringify({id:t.id(),name:t.name(),artist:t.artist(),album:t.album(),artwork:t.artworkUrl(),duration:t.duration()/1000,position:s.playerPosition(),playing:s.playerState()==='playing',volume:s.soundVolume(),shuffle:s.shuffling()});`,true));
+    return JSON.parse(await osa(SPOTIFY_READ_JXA,true));
   }
 }
 export class Demo {
-  track: Track = {id:'demo',name:'Go To Town',artist:'Doja Cat',album:'Amala • Demo tape',artwork:'',duration:217,position:15,playing:true,volume:65,shuffle:false};
+  track: Track = {id:'demo',name:'Go To Town',artist:'Doja Cat',album:'Amala • Demo tape',artwork:'',duration:217,position:15,playing:true,volume:65,shuffle:false,repeating:false,albumArtist:'Doja Cat',discNumber:1,trackNumber:1,popularity:72,starred:false,spotifyUrl:'https://open.spotify.com/track/demo'};
   last = Date.now();
   async seek(position:number){if(!Number.isFinite(position)||position<0)throw new Error('Invalid playback position');this.track.position=Math.min(position,this.track.duration);this.last=Date.now();}
+  async setVolume(volume:number){this.track.volume=Math.max(0,Math.min(100,Math.round(volume)));}
+  async setRepeating(on:boolean){this.track.repeating=on;}
+  async playUri(id:string,extra?:{name?:string;artist?:string;album?:string}){
+    await this.read();
+    const key=id.replace(/^spotify:track:/,'');
+    if(extra?.name||extra?.artist){
+      this.track.id=key;
+      if(extra.name)this.track.name=extra.name;
+      if(extra.artist)this.track.artist=extra.artist;
+      if(extra.album)this.track.album=extra.album;
+    }else if(key==='demo-2'){
+      this.track.id='demo-2';this.track.name='Roll With Us';
+    }else{
+      this.track.id='demo';this.track.name='Go To Town';
+    }
+    this.track.position=0;this.track.playing=true;this.last=Date.now();
+  }
   async read() { const now=Date.now(); if(this.track.playing) this.track.position=(this.track.position+(now-this.last)/1000)%this.track.duration; this.last=now; return {...this.track}; }
-  async command(c: Command) { await this.read(); if(c==='toggle') this.track.playing=!this.track.playing; if(c==='play') this.track.playing=true; if(c==='pause') this.track.playing=false; if(c==='shuffle') this.track.shuffle=!this.track.shuffle; if(c==='next'||c==='previous') {this.track.name=this.track.name==='Go To Town'?'Roll With Us':'Go To Town';this.track.position=0;} if(c==='forward'||c==='back') this.track.position=Math.max(0,Math.min(this.track.duration,this.track.position+(c==='forward'?10:-10))); if(c==='louder'||c==='quieter')this.track.volume=Math.max(0,Math.min(100,this.track.volume+(c==='louder'?5:-5))); }
+  async command(c: Command) { await this.read(); if(c==='toggle') this.track.playing=!this.track.playing; if(c==='play') this.track.playing=true; if(c==='pause') this.track.playing=false; if(c==='shuffle') this.track.shuffle=!this.track.shuffle; if(c==='next'||c==='previous') {this.track.name=this.track.name==='Go To Town'?'Roll With Us':'Go To Town';this.track.id=this.track.name==='Go To Town'?'demo':'demo-2';this.track.position=0;} if(c==='forward'||c==='back') this.track.position=Math.max(0,Math.min(this.track.duration,this.track.position+(c==='forward'?10:-10))); if(c==='louder'||c==='quieter')this.track.volume=Math.max(0,Math.min(100,this.track.volume+(c==='louder'?5:-5))); }
 }
