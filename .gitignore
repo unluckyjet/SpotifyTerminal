@@ -1,0 +1,4 @@
+node_modules/
+preview.txt
+native/*.app/
+.DS_Store

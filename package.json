@@ -1,0 +1,27 @@
+{
+  "name": "spotterminal",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A minimal Spotify player with native album art, built with OpenTUI for macOS",
+  "bin": {
+    "spotterminal": "bin/spotterminal"
+  },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "demo": "bun src/index.ts --demo",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build:overlay": "sh scripts/build-overlay.sh",
+    "test:overlay": "\"native/Spotterminal Artwork.app/Contents/MacOS/SpotterminalArtwork\" --self-test"
+  },
+  "dependencies": {
+    "@opentui/core": "0.5.10",
+    "bun": "1.4.2",
+    "chafa-wasm": "0.3.3",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.1",
+    "typescript": "5.9.3"
+  }
+}
