@@ -33,7 +33,7 @@ The three playback controls also accept mouse clicks. Keyboard shortcuts remain 
 
 ## Install
 
-Requires Node.js, npm, and macOS for live playback. Bun is installed locally by npm. Building the optional native overlay also requires the Xcode Command Line Tools (`xcode-select --install`).
+Requires Node.js 20.9 or newer, npm, and macOS for live playback. Bun is installed locally by npm. Building the optional native overlay also requires the Xcode Command Line Tools (`xcode-select --install`).
 
 ```sh
 git clone https://github.com/unluckyjet/SpotifyTerminal.git
