@@ -1,0 +1,46 @@
+import {test,expect} from 'bun:test';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {FirstSeen} from './first-seen';
+test('first-seen stores ISO once, ignores later plays, and restores first-seen.json',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'spotterminal-first-seen-'));
+  try{
+    const seen=new FirstSeen(directory);await seen.load();
+    expect(seen.get('a')).toBeUndefined();expect(Object.keys(seen.dates)).toHaveLength(0);
+    const at=new Date('2024-03-04T05:06:07.089Z');
+    const first=await seen.record('a',at);expect(first).toBe(at.toISOString());
+    expect(seen.get('a')).toBe(first);expect(await seen.record('a',new Date('2025-01-01T00:00:00.000Z'))).toBe(first);
+    expect(seen.get('a')).toBe(first);
+    const before=Date.now();
+    const nowIso=await seen.record('b');
+    const after=Date.now();
+    const stamped=Date.parse(nowIso);
+    expect(stamped).toBeGreaterThanOrEqual(before);expect(stamped).toBeLessThanOrEqual(after);
+    expect(await seen.record('b')).toBe(nowIso);expect(seen.get('b')).toBe(nowIso);
+    expect(await seen.record('')).toBe('');expect(seen.get('')).toBeUndefined();
+    const onDisk=JSON.parse(await readFile(join(directory,'first-seen.json'),'utf8'));
+    expect(onDisk.a).toBe(first);expect(onDisk.b).toBe(nowIso);expect(onDisk).not.toHaveProperty('');
+    const restored=new FirstSeen(directory);await restored.load();
+    expect(restored.get('a')).toBe(first);expect(restored.get('b')).toBe(nowIso);expect(restored.get('c')).toBeUndefined();
+    expect(await restored.record('a',new Date())).toBe(first);
+    const later=new Date('2020-06-07T08:09:10.111Z');
+    expect(await restored.record('c',later)).toBe(later.toISOString());
+    const again=new FirstSeen(directory);await again.load();
+    expect(again.get('a')).toBe(first);expect(again.get('c')).toBe(later.toISOString());
+    await writeFile(join(directory,'first-seen.json'),'not json');
+    const bad=new FirstSeen(directory);await bad.load();expect(bad.dates).toEqual({});
+    await writeFile(join(directory,'first-seen.json'),JSON.stringify({ok:'2021-02-03T04:05:06.007Z',bad:3,empty:'',nope:'not-a-date',arr:[]}));
+    const filtered=new FirstSeen(directory);await filtered.load();
+    expect(filtered.get('ok')).toBe('2021-02-03T04:05:06.007Z');
+    expect(filtered.get('bad')).toBeUndefined();expect(filtered.get('empty')).toBeUndefined();expect(filtered.get('nope')).toBeUndefined();
+    const missing=new FirstSeen(join(directory,'missing'));await missing.load();
+    expect(missing.dates).toEqual({});
+    const nestedAt=new Date('2019-12-31T23:59:59.000Z');
+    expect(await missing.record('z',nestedAt)).toBe(nestedAt.toISOString());
+    expect(JSON.parse(await readFile(join(directory,'missing','first-seen.json'),'utf8')).z).toBe(nestedAt.toISOString());
+    const concurrent=await Promise.all([seen.record('x',new Date('2018-01-01T00:00:00.000Z')),seen.record('x',new Date('2018-06-01T00:00:00.000Z'))]);
+    expect(new Set(concurrent).size).toBe(1);expect(seen.get('x')).toBe(concurrent[0]);
+    expect(JSON.parse(await readFile(join(directory,'first-seen.json'),'utf8')).x).toBe(concurrent[0]);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});

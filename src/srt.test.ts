@@ -1,0 +1,26 @@
+import {test,expect} from 'bun:test';
+import {lyricsToSrt,srtStamp} from './srt';
+test('srtStamp is HH:MM:SS,mmm; lyricsToSrt numbers cues and ends at next, duration, or last+3s',()=>{
+  expect(srtStamp(0)).toBe('00:00:00,000');
+  expect(srtStamp(1.5)).toBe('00:00:01,500');
+  expect(srtStamp(61.234)).toBe('00:01:01,234');
+  expect(srtStamp(3661.007)).toBe('01:01:01,007');
+  expect(srtStamp(10*3600+3.04)).toBe('10:00:03,040');
+  expect(srtStamp(-2)).toBe(srtStamp(0));
+  expect(srtStamp(NaN)).toBe(srtStamp(0));
+  expect(srtStamp(0.0004)).toBe('00:00:00,000');
+  expect(srtStamp(0.0005)).toBe('00:00:00,001');
+  expect(srtStamp(3599.9996)).toBe('01:00:00,000');
+  const lines=[{time:1,text:'First'},{time:2.5,text:'Second'},{time:10,text:'Last'}];
+  const next=lyricsToSrt(lines);
+  expect(next).toBe(`1\n${srtStamp(1)} --> ${srtStamp(2.5)}\nFirst\n\n2\n${srtStamp(2.5)} --> ${srtStamp(10)}\nSecond\n\n3\n${srtStamp(10)} --> ${srtStamp(13)}\nLast`);
+  expect(next).toContain('00:00:01,000 --> 00:00:02,500');
+  expect(next.split('\n\n').map(cue=>cue.split('\n')[0])).toEqual(['1','2','3']);
+  const capped=lyricsToSrt(lines,12);
+  expect(capped).toBe(`1\n${srtStamp(1)} --> ${srtStamp(2.5)}\nFirst\n\n2\n${srtStamp(2.5)} --> ${srtStamp(10)}\nSecond\n\n3\n${srtStamp(10)} --> ${srtStamp(12)}\nLast`);
+  expect(capped).toContain(`${srtStamp(10)} --> ${srtStamp(12)}`);
+  expect(capped).not.toContain(srtStamp(13));
+  expect(lyricsToSrt([{time:5,text:'Only'}])).toBe(`1\n${srtStamp(5)} --> ${srtStamp(8)}\nOnly`);
+  expect(lyricsToSrt([{time:5,text:'Only'}],9)).toBe(`1\n${srtStamp(5)} --> ${srtStamp(9)}\nOnly`);
+  expect(lyricsToSrt([],180)).toBe('');
+});

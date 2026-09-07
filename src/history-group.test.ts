@@ -1,0 +1,24 @@
+import {test,expect} from 'bun:test';
+import {groupHistory} from './history-group';
+test('groupHistory keeps first-seen keys and uses Unknown for empty',()=>{
+  const a={name:'Airbag',artist:'Radiohead',album:'OK Computer'};
+  const b={name:'Joga',artist:'Bjork',album:'Homogenic'};
+  const c={name:'Everything In Its Right Place',artist:'Radiohead',album:'Kid A'};
+  const d={name:'Untitled',artist:'',album:''};
+  const e={name:'Unravel',artist:'Bjork',album:'Homogenic'};
+  const f={name:'Solo',artist:'Unknown',album:'Homogenic'};
+  const entries=[a,b,c,d,e,f];
+  const artists=groupHistory(entries,'artist');
+  expect(artists.map(g=>g.key)).toEqual(['Radiohead','Bjork','Unknown']);
+  expect(artists[0].items).toEqual([a,c]);
+  expect(artists[1].items).toEqual([b,e]);
+  expect(artists[2].items).toEqual([d,f]);
+  const albums=groupHistory(entries,'album');
+  expect(albums.map(g=>g.key)).toEqual(['OK Computer','Homogenic','Kid A','Unknown']);
+  expect(albums[1].items).toEqual([b,e,f]);
+  expect(albums[3].items).toEqual([d]);
+  expect(groupHistory([],'artist')).toEqual([]);
+  expect(groupHistory([{artist:'',album:'X'}],'artist')[0]).toEqual({key:'Unknown',items:[{artist:'',album:'X'}]});
+  expect(groupHistory([{artist:'Y',album:''}],'album')[0].key).toBe('Unknown');
+  expect(entries.map(t=>t.artist)).toEqual(['Radiohead','Bjork','Radiohead','','Bjork','Unknown']);
+});

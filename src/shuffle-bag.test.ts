@@ -1,0 +1,32 @@
+import {test,expect} from 'bun:test';
+import {ShuffleBag} from './shuffle-bag';
+test('next() n times yields all unique then repeats the set',()=>{
+  const items=['a','b','c','d'];
+  const bag=new ShuffleBag(items);
+  expect(bag.remaining()).toBe(items.length);
+  items.push('mutated');
+  expect(bag.remaining()).toBe(4);
+  const first:string[]=[];
+  for(let i=0;i<4;i++){expect(bag.remaining()).toBe(4-i);first.push(bag.next());}
+  expect(new Set(first).size).toBe(4);
+  expect([...first].sort()).toEqual(['a','b','c','d']);
+  expect(bag.remaining()).toBe(0);
+  const twin=new ShuffleBag(['a','b','c','d']);
+  expect(['a','b','c','d'].map(()=>twin.next())).toEqual(first);
+  const second:string[]=[];
+  for(let i=0;i<4;i++)second.push(bag.next());
+  expect(new Set(second).size).toBe(4);
+  expect([...second].sort()).toEqual(['a','b','c','d']);
+  expect(bag.remaining()).toBe(0);
+  bag.reset();
+  expect(bag.remaining()).toBe(4);
+  expect(['a','b','c','d'].map(()=>bag.next())).toEqual(first);
+  bag.reset(['x','y','z']);
+  expect(bag.remaining()).toBe(3);
+  const xyz=['x','y','z'].map(()=>bag.next());
+  expect(new Set(xyz).size).toBe(3);
+  expect([...xyz].sort()).toEqual(['x','y','z']);
+  expect(bag.remaining()).toBe(0);
+  const other=new ShuffleBag(['x','y','z']);
+  expect(['x','y','z'].map(()=>other.next())).toEqual(xyz);
+});

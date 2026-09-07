@@ -1,0 +1,27 @@
+import {test,expect} from 'bun:test';
+import {CommandDebounce} from './debounce';
+test('CommandDebounce allows unseen or elapsed commands, keeps others independent, reset clears',()=>{
+  const d=new CommandDebounce();
+  expect(d.allow('next',1000)).toBe(true);
+  expect(d.allow('next',1119)).toBe(false);
+  expect(d.allow('next',1120)).toBe(true);
+  expect(d.allow('next',1120)).toBe(false);
+  expect(d.allow('vol+',1120)).toBe(true);
+  expect(d.allow('vol-',1120)).toBe(true);
+  expect(d.allow('vol+',1239)).toBe(false);
+  expect(d.allow('next',1239)).toBe(false);
+  expect(d.allow('vol+',1240)).toBe(true);
+  d.reset();
+  expect(d.allow('next',1240)).toBe(true);
+  expect(d.allow('vol+',1240)).toBe(true);
+  const tight=new CommandDebounce(50);
+  expect(tight.allow('play',0)).toBe(true);
+  expect(tight.allow('play',49)).toBe(false);
+  expect(tight.allow('play',50)).toBe(true);
+  const live=new CommandDebounce(10_000);
+  expect(live.allow('pause')).toBe(true);
+  expect(live.allow('pause')).toBe(false);
+  expect(live.allow('play')).toBe(true);
+  live.reset();
+  expect(live.allow('pause')).toBe(true);
+});

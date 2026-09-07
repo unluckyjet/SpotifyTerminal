@@ -1,0 +1,26 @@
+import {test,expect} from 'bun:test';
+import {UndoStack} from './undo';
+test('UndoStack is LIFO: last skip pops first, empty pop is undefined, length tracks depth',()=>{
+  const stack=new UndoStack<string>();
+  expect(stack.length).toBe(0);
+  expect(stack.pop()).toBeUndefined();
+  expect(stack.length).toBe(0);
+  stack.push('a');stack.push('b');stack.push('c');
+  expect(stack.length).toBe(3);
+  expect(stack.pop()).toBe('c');expect(stack.length).toBe(2);
+  expect(stack.pop()).toBe('b');expect(stack.length).toBe(1);
+  stack.push('d');expect(stack.length).toBe(2);
+  expect(stack.pop()).toBe('d');expect(stack.pop()).toBe('a');
+  expect(stack.pop()).toBeUndefined();expect(stack.length).toBe(0);
+  stack.push('e');expect(stack.pop()).toBe('e');expect(stack.length).toBe(0);
+  const ids=new UndoStack<{id:string}>();
+  const first={id:'track-1'};const second={id:'track-2'};
+  ids.push(first);ids.push(second);
+  expect(ids.length).toBe(2);
+  expect(ids.pop()).toBe(second);expect(ids.pop()).toBe(first);
+  expect(ids.pop()).toBeUndefined();
+  const other=new UndoStack<string>();
+  stack.push('x');other.push('y');
+  expect(stack.pop()).toBe('x');expect(other.pop()).toBe('y');
+  expect(stack.length).toBe(0);expect(other.length).toBe(0);
+});

@@ -1,0 +1,33 @@
+import {test,expect} from 'bun:test';
+import {duplicateKey,findDuplicates} from './duplicates';
+
+test('duplicateKey lowercases trimmed name|artist; findDuplicates returns size>1 groups in first-seen order',()=>{
+  expect(duplicateKey({name:'Airbag',artist:'Radiohead'})).toBe('airbag|radiohead');
+  expect(duplicateKey({name:'  Karma Police  ',artist:' RADIOHEAD '})).toBe('karma police|radiohead');
+  expect(duplicateKey({name:'',artist:'  '})).toBe('|');
+  expect(duplicateKey({name:'Jóga',artist:'Björk'})).toBe('jóga|björk');
+  const a={id:'1',name:'Airbag',artist:'Radiohead',album:'OK Computer'};
+  const b={id:'2',name:'Joga',artist:'Bjork',album:'Homogenic'};
+  const c={id:'3',name:'  AIRBAG ',artist:'radiohead ',album:'OKNOTOK'};
+  const d={id:'4',name:'Teardrop',artist:'Massive Attack',album:'Mezzanine'};
+  const e={id:'5',name:'Joga',artist:'Bjork',album:'Greatest Hits'};
+  const f={id:'6',name:'Solo',artist:'Frank Ocean',album:'Blonde'};
+  const g={id:'7',name:'teardrop',artist:'Massive Attack',album:'Singles'};
+  const unique={id:'u',name:'Unique',artist:'Only',album:''};
+  const entries=[a,b,c,d,e,f,g,unique];
+  const dupes=findDuplicates(entries);
+  expect(dupes.map(group=>duplicateKey(group[0]))).toEqual(['airbag|radiohead','joga|bjork','teardrop|massive attack']);
+  expect(dupes.every(group=>group.length>1)).toBe(true);
+  expect(dupes[0]).toEqual([a,c]);
+  expect(dupes[1]).toEqual([b,e]);
+  expect(dupes[2]).toEqual([d,g]);
+  expect(dupes[0][0]).toBe(a);
+  expect(dupes[0][1]).toBe(c);
+  expect(dupes[0][1].album).toBe('OKNOTOK');
+  expect(findDuplicates([])).toEqual([]);
+  expect(findDuplicates([a,b,f,unique])).toEqual([]);
+  expect(findDuplicates([a])).toEqual([]);
+  const later=[f,g,a,d,c];
+  expect(findDuplicates(later).map(group=>group.map(t=>t.id))).toEqual([['7','4'],['1','3']]);
+  expect(findDuplicates([{id:'x',name:'A',artist:'B'},{id:'y',name:'A',artist:'B'}])[0].map(t=>t.id)).toEqual(['x','y']);
+});

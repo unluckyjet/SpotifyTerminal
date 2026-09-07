@@ -1,0 +1,26 @@
+import {test,expect} from 'bun:test';
+import {searchHistory} from './history-search';
+test('searchHistory returns all for blank query and requires every word in name/artist/album',()=>{
+  const a={name:'Paranoid Android',artist:'Radiohead',album:'OK Computer',id:'1'};
+  const b={name:'Karma Police',artist:'Radiohead',album:'OK Computer',id:'2'};
+  const c={name:'Teardrop',artist:'Massive Attack',album:'Mezzanine',id:'3'};
+  const d={name:'Everything In Its Right Place',artist:'Radiohead',album:'Kid A',id:'4'};
+  const entries=[a,b,c,d];
+  expect(searchHistory(entries,'')).toEqual(entries);
+  expect(searchHistory(entries,'   ')).toEqual(entries);
+  expect(searchHistory(entries,'\t\n ')).toEqual(entries);
+  expect(searchHistory(entries,'radiohead')).toEqual([a,b,d]);
+  expect(searchHistory(entries,'RADIOHEAD')).toEqual(searchHistory(entries,'radiohead'));
+  expect(searchHistory(entries,'ok computer')).toEqual([a,b]);
+  expect(searchHistory(entries,'  Radiohead   Computer ')).toEqual([a,b]);
+  expect(searchHistory(entries,'massive teardrop')).toEqual([c]);
+  expect(searchHistory(entries,'police karma')).toEqual([b]);
+  expect(searchHistory(entries,'android')).toEqual([a]);
+  expect(searchHistory(entries,'kid')).toEqual([d]);
+  expect(searchHistory(entries,'radiohead teardrop')).toEqual([]);
+  expect(searchHistory(entries,'nope')).toEqual([]);
+  expect(searchHistory([],'x')).toEqual([]);
+  expect(searchHistory([],'')).toEqual([]);
+  const hit=searchHistory(entries,'paranoid')[0];
+  expect(hit).toBe(a);expect(hit.id).toBe('1');
+});

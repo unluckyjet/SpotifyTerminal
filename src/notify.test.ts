@@ -1,0 +1,23 @@
+import {test, expect} from 'bun:test';
+import {notifyPayload, appleScriptString, notifyArgs} from './notify';
+test('notifyArgs spawn osascript argv and escape AppleScript string literals', () => {
+  const track = {name: 'Go To Town', artist: 'Doja Cat', album: 'Amala • Demo tape'};
+  const payload = notifyPayload(track);
+  expect(payload).toEqual({title: track.name, subtitle: track.artist, body: track.album});
+  const args = notifyArgs(payload);
+  expect(args[0]).toBe('osascript');
+  expect(args[1]).toBe('-e');
+  expect(args[2]).toContain('display notification');
+  expect(args[2]).toContain(`"${payload.body}"`);
+  expect(args.join(' ')).not.toContain('sh -c');
+  const nasty = notifyPayload({name: `it's $HOME\n"quoted"`, artist: 'Doja `Cat`', album: 'Amala\r\nDemo'});
+  expect(appleScriptString(nasty.title)).toContain('\\"quoted\\"');
+  expect(appleScriptString(nasty.title)).not.toContain('\n');
+  expect(appleScriptString(nasty.body)).not.toMatch(/[\r\n]/);
+  const script = notifyArgs(nasty)[2];
+  expect(script).toContain(appleScriptString(nasty.title));
+  expect(script).toContain(appleScriptString(nasty.subtitle));
+  expect(script).toContain(appleScriptString(nasty.body));
+  expect(script).not.toContain('\n');
+  expect(script.startsWith('display notification "')).toBe(true);
+});
