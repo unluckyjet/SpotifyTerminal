@@ -8,6 +8,7 @@ import {ListeningHistory} from './history';
 import {exportPostcard} from './postcard';
 import {CommandPalette} from './palette';
 import {LyricsLibrary} from './lyrics';
+import {FocusTimer} from './focus';
 const args=process.argv.slice(2);
 if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen] [--transitions]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\n/: commands | P: postcard | H: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
 if(args.includes('--lyrics')&&(!args[args.indexOf('--lyrics')+1]||args[args.indexOf('--lyrics')+1].startsWith('--'))){console.error('--lyrics needs a path to an .lrc file');process.exit(1);}
@@ -17,6 +18,8 @@ const lyricsLibrary=new LyricsLibrary();
 let lyricsTrack='',lyricsVersion=0;
 let pendingLyricsPath=args.includes('--lyrics')?args[args.indexOf('--lyrics')+1]:undefined;
 const history=new ListeningHistory();await history.load();
+const focus=new FocusTimer();
+if(args.includes('--focus')){try{focus.start(Number(args[args.indexOf('--focus')+1]));}catch(e){console.error(String(e));process.exit(1);}}
 const backend=demo?new Demo():new Spotify();
 const renderer=await createCliRenderer({exitOnCtrlC:false,useMouse:true});
 let track:Track={id:'',name:'Connecting to Spotify…',artist:'',album:'',artwork:'',duration:0,position:0,playing:false,volume:0,shuffle:false};
@@ -50,6 +53,11 @@ async function browseHistory(delta=0){
   const encoded=await history.cover(entry);
   if(encoded){try{const palette=await sharp(encoded).resize(32,32).removeAlpha().toColourspace('srgb').raw().toBuffer();if(version===historyVersion)historyCover={encoded,palette};}catch{status='Saved cover unavailable';}}
 }
+let notice='',noticeUntil=0;
+function announce(message:string){notice=message;noticeUntil=Date.now()+6000;}
+let focusInputMode=false,focusInput='25';
+function openFocus(){focusInputMode=true;focusInput='25';ui.dialog={title:'Focus timer · minutes',input:focusInput,footer:'Enter start · 0 cancels timer · Escape close'};}
+function setFocus(){focusInputMode=false;ui.dialog=undefined;try{const minutes=Number(focusInput);if(minutes===0){focus.cancel();announce('Focus timer cancelled');}else{focus.start(minutes);announce(`Focus started: ${minutes} minutes`);}}catch(e){announce(String(e));}}
 let lyricsImportMode=false,lyricsPathInput='',lyricsImportTrack='';
 function openLyricsImport(){lyricsImportMode=true;lyricsPathInput='';lyricsImportTrack=track.id;ui.dialog={title:'Import lyrics for '+track.name,input:'',footer:'Path to .lrc file · Enter import · Escape cancel'};}
 async function importLyrics(path:string,id:string){
@@ -73,7 +81,15 @@ const overlay=new ArtworkOverlay(true,event=>{if(event.command==='quit')quit();e
 renderer.setTerminalTitle(overlay.token);
 const ui=new PlayerUI(renderer,action,overlay);
 ui.fullscreen=args.includes('--fullscreen');ui.transitions=args.includes('--transitions');
-const animation=setInterval(()=>{if(!closed){overlay.setTrack(track,cover);if(!demo)void history.record(track,cover).catch(()=>{status='Could not save listening history';});ui.draw(ui.gallery&&historyTrack?historyTrack:track,ui.gallery?historyCover:cover,demo,status);}},100);
+function redraw(){
+  if(closed)return;
+  if(focus.expired())queue=queue.then(async()=>{try{await backend.command('pause');await poll();announce('Focus complete · playback paused');}catch(e){announce(`Focus complete; pause failed: ${String(e)}`);}});
+  ui.focusRemaining=focus.remaining();
+  overlay.setTrack(track,cover);
+  if(!demo)void history.record(track,cover).catch(()=>{status='Could not save listening history';});
+  ui.draw(ui.gallery&&historyTrack?historyTrack:track,ui.gallery?historyCover:cover,demo,Date.now()<noticeUntil?notice:status);
+}
+const animation=setInterval(redraw,100);
 const polling=setInterval(()=>void poll(),1000);
 function quit(){closed=true;overlay.close();clearInterval(animation);clearInterval(polling);renderer.destroy();process.exit(0);}
 let paletteOpen=false;
@@ -91,6 +107,8 @@ const palette=new CommandPalette([
   {id:'overlay',label:'Enable native artwork overlay',keywords:'accessibility',run:()=>overlay.requestAccess()},
   {id:'lyrics',label:'Toggle synchronized lyrics',run:()=>{ui.lyricsOpen=!ui.lyricsOpen;}},
   {id:'import-lyrics',label:'Import lyrics from an LRC file',run:openLyricsImport},
+  {id:'focus',label:'Start a focus timer',keywords:'pause session minutes',run:openFocus},
+  {id:'cancel-focus',label:'Cancel focus timer',run:()=>{focus.cancel();announce('Focus timer cancelled');}},
   {id:'quit',label:'Quit Spotterminal',run:quit},
 ]);
 function refreshPalette(){const view=palette.view(Math.max(1,Math.min(8,renderer.height-12)));ui.dialog={title:'Commands',input:palette.query,...view,footer:view.lines.length?'↑ ↓ choose · Enter run · Escape close':'No matching commands · Escape close'};}
@@ -98,6 +116,13 @@ renderer.keyInput.on('keypress',key=>{
   ui.interact();
   if(key.ctrl&&key.name==='c')return quit();
   const printable=!key.ctrl&&!key.meta&&key.sequence&&!/[\x00-\x1f\x7f]/.test(key.sequence);
+  if(focusInputMode){
+    if(key.name==='escape'){focusInputMode=false;ui.dialog=undefined;}
+    else if(key.name==='return')setFocus();
+    else if(key.name==='backspace')focusInput=focusInput.slice(0,-1);
+    else if(printable&&/^[0-9.]+$/.test(key.sequence))focusInput=(focusInput+key.sequence).slice(0,8);
+    if(ui.dialog)ui.dialog.input=focusInput;return;
+  }
   if(lyricsImportMode){
     if(key.name==='escape'){lyricsImportMode=false;ui.dialog=undefined;}
     else if(key.name==='return'){lyricsImportMode=false;ui.dialog=undefined;void importLyrics(lyricsPathInput,lyricsImportTrack);}
@@ -123,6 +148,7 @@ renderer.keyInput.on('keypress',key=>{
     refreshPalette();return;
   }
   if(key.name==='/'||key.sequence==='/'){paletteOpen=true;palette.edit('');refreshPalette();return;}
+  if(key.name==='f'){openFocus();return;}
   if(key.name==='l'){ui.lyricsOpen=!ui.lyricsOpen;return;}
   if(key.name==='i'){openLyricsImport();return;}
   if(key.name==='p'){openPostcard();return;}

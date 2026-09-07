@@ -35,6 +35,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | P | Export a listening postcard |
 | / | Search the command palette |
 | L / I | Toggle lyrics / import an LRC file |
+| F | Set or cancel a focus timer |
 | T | Toggle optional cover/color transitions |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |
@@ -85,6 +86,10 @@ Press **/** and type to filter playback and appearance commands. Use **Up/Down**
 ## Synchronized lyrics
 
 Press **I** to import a local `.lrc` file for the current song, then **L** to toggle lyrics. You can also launch with `--lyrics /path/to/song.lrc`; it attaches to the first available track. Imported lyrics are stored by Spotify track ID and restored when you play that track again. Wide windows show lyrics beside the cover; narrow windows use the artwork area. Timing follows Spotify’s position, including seeking. Positive LRC offset tags advance the lyrics. Lyrics are read from files you supply; the app does not fetch lyrics online.
+
+## Focus sessions
+
+Press **F** to set a timer in minutes, or launch with `--focus 25`. At the deadline, Spotterminal sends an explicit pause command and shows the result. Enter `0` in the timer dialog or choose “Cancel focus timer” from the palette to cancel. The timer runs while Spotterminal is open and counts elapsed wall-clock time, including time your computer spends asleep.
 
 ## Development
 

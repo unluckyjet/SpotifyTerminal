@@ -21,6 +21,7 @@ export class PlayerUI {
   gallery?:{index:number;total:number};
   dialog?:Dialog;
   lyricsOpen=false;
+  focusRemaining?:number;
   lyricLines:LyricLine[]=[];
   lastInteraction=Date.now();
   interact(){this.lastInteraction=Date.now();}
@@ -103,7 +104,7 @@ export class PlayerUI {
         else this.lyricLines.slice(start,start+count).forEach((line,i)=>put(lx,ly+i*2,((start+i===index?'› ':'  ')+line.text).slice(0,lw),start+i===index?colors.accent:colors.muted));
         if(!sideLyrics)layout=undefined;
       }
-      const note=this.gallery?`History ${this.gallery.index+1}/${this.gallery.total} · ← → browse · H back`:(status||this.overlay?.note|| (demo?'demo · no audio':''));
+      const note=this.gallery?`History ${this.gallery.index+1}/${this.gallery.total} · ← → browse · H back`:(status||(this.focusRemaining!==undefined?`Focus ${clock(this.focusRemaining)}`:'')||this.overlay?.note|| (demo?'demo · no audio':''));
       if(note)put(left,Math.min(H-1,controlY+2),note.replace(/[\r\n\x1b]/g,' ').slice(0,width),colors.muted);
     }
     if(this.dialog){
