@@ -1,8 +1,30 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const os = require('node:os');
+const { spawn, spawnSync } = require('node:child_process');
 const root = path.dirname(path.dirname(fs.realpathSync(__filename)));
-const result = spawnSync(path.join(root, 'node_modules/.bin/bun'), [path.join(root, 'src/index.ts'), ...process.argv.slice(2)], { stdio: 'inherit' });
-if (result.error) console.error('Run npm install in ' + root + ' first.');
-process.exit(result.status ?? 1);
+const bun = path.join(root, 'node_modules/.bin/bun');
+const args = process.argv.slice(2);
+if (!fs.existsSync(bun)) { console.error('Run npm install in ' + root + ' first.'); process.exit(1); }
+if (args.includes('--mini') && !args.includes('--help') && !args.includes('--foreground')) {
+  if (process.platform !== 'darwin' || !fs.existsSync(path.join(root, 'native/Spotterminal Artwork.app/Contents/MacOS/SpotterminalArtwork'))) {
+    console.error('The mini player requires macOS and npm run build:overlay.'); process.exit(1);
+  }
+  if (args.includes('--focus')) {
+    const minutes = Number(args[args.indexOf('--focus') + 1]);
+    if (!Number.isFinite(minutes) || minutes < 0.1 || minutes > 1440) { console.error('--focus requires 0.1–1440 minutes.'); process.exit(1); }
+  }
+  const directory = process.env.SPOTTERMINAL_DATA_DIR || path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), 'Library', 'Application Support'), 'Spotterminal');
+  fs.mkdirSync(directory, { recursive: true });
+  const log = path.join(directory, 'mini.log');
+  const fd = fs.openSync(log, 'a');
+  const child = spawn(bun, [path.join(root, 'src/mini.ts'), ...args], { detached: true, stdio: ['ignore', fd, fd] });
+  child.on('error', error => { console.error(error.message); process.exitCode = 1; });
+  child.unref();fs.closeSync(fd);
+  console.log('Mini player launched. Quit from its menu bar icon. Log: ' + log);
+} else {
+  const result = spawnSync(bun, [path.join(root, 'src/index.ts'), ...args], { stdio: 'inherit' });
+  if (result.error) console.error(result.error.message);
+  process.exit(result.status ?? 1);
+}

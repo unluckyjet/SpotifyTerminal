@@ -6,6 +6,12 @@ A Spotify desktop remote for macOS, built with Anomaly's OpenTUI. Centered song,
 
 While Spotterminal is running, its music-note icon appears in the macOS menu bar. Open it for current track details, play/pause, previous/next, shuffle, volume, and quit. These controls work without Accessibility permission. The native helper must be built (`npm run build:overlay`). Use `--no-menubar` to hide the icon; `--no-overlay` only disables the artwork overlay.
 
+## Desktop mini player
+
+Run `spotterminal --mini` for a small floating desktop player with full-resolution album art, song/album/artist details, a seek slider, and previous/play/next controls. It runs in the background and returns your shell prompt. Use **M** in the terminal player or “Show Mini Player” in the menu bar to open the same window. Closing it hides the window; the menu bar’s Quit action ends Spotterminal. With `--no-menubar`, closing the standalone mini player quits it instead.
+
+The mini player needs the native build but does not need Accessibility permission. Its background comes from the album cover. It supports `--no-autoplay`, `--transitions`, `--focus`, and optional `--system-media`. For troubleshooting, use `--mini --foreground` to keep logs in your terminal, or read `mini.log` in the local data directory. Lyrics, postcards, and gallery browsing remain in the terminal interface.
+
 ## System media controls
 
 Run `spotterminal --system-media` to publish the current title, artist, album, artwork, progress, and playback state through macOS Now Playing, with play/pause, skip, and scrub controls routed to Spotify. This uses the public MediaPlayer API. macOS decides whether this session appears in Control Center, media-key controls, or a lock-screen surface; lock-screen presentation is not guaranteed. This mode is optional because Spotify already publishes its own system media session. It is disabled in silent demo mode.
@@ -36,6 +42,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | / | Search the command palette |
 | L / I | Toggle lyrics / import an LRC file |
 | F | Set or cancel a focus timer |
+| M | Show / hide the desktop mini player |
 | T | Toggle optional cover/color transitions |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |

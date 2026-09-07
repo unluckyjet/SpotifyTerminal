@@ -23,6 +23,8 @@ struct Frame: Codable {
     var playbackImage:String?=nil
     var clearPlaybackImage:Bool?=nil
     var transitions:Bool?=nil
+    var mini:Bool?=nil
+    var playbackBackground:String?=nil
 }
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -110,7 +112,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
         let target=remote.addTarget { [weak self] event in
             guard let self,self.frame?.systemMedia==true,Date().timeIntervalSince(self.updated)<2,
                   let event=event as? MPChangePlaybackPositionCommandEvent,event.positionTime.isFinite,event.positionTime>=0 else { return .commandFailed }
-            if let data=try? JSONSerialization.data(withJSONObject:["command":"seek","position":event.positionTime]),let text=String(data:data,encoding:.utf8){print(text);fflush(stdout)}
+            self.emit(["command":"seek","position":event.positionTime])
             return .success
         }
         remoteTargets.append((remote,target));mediaActive=true
@@ -146,8 +148,10 @@ final class Overlay: NSObject, NSApplicationDelegate {
     let playItem=NSMenuItem(title:"Play / Pause",action:#selector(menuAction(_:)),keyEquivalent:"")
     let shuffleItem=NSMenuItem(title:"Shuffle",action:#selector(menuAction(_:)),keyEquivalent:"")
 
-    func command(_ name:String) {
-        guard let data=try? JSONSerialization.data(withJSONObject:["command":name]),let text=String(data:data,encoding:.utf8) else { return }
+    func command(_ name:String) { emit(["command":name]) }
+    func emit(_ value:[String:Any]) {
+        if !Thread.isMainThread {DispatchQueue.main.async {self.emit(value)};return}
+        guard let data=try? JSONSerialization.data(withJSONObject:value),let text=String(data:data,encoding:.utf8) else { return }
         print(text);fflush(stdout)
     }
     @objc func menuAction(_ item:NSMenuItem) { if let action=item.representedObject as? String { command(action) } }
@@ -164,7 +168,8 @@ final class Overlay: NSObject, NSApplicationDelegate {
         statusMenu.addItem(menuItem("Previous Track","previous"));statusMenu.addItem(menuItem("Next Track","next"))
         shuffleItem.target=self;shuffleItem.representedObject="shuffle";statusMenu.addItem(shuffleItem)
         statusMenu.addItem(.separator());statusMenu.addItem(menuItem("Volume Up","louder"));statusMenu.addItem(menuItem("Volume Down","quieter"))
-        statusMenu.addItem(.separator());statusMenu.addItem(menuItem("Quit Spotterminal","quit"))
+        statusMenu.addItem(.separator());statusMenu.addItem(menuItem("Show Mini Player","mini"))
+        statusMenu.addItem(menuItem("Quit Spotterminal","quit"))
     }
     func updateMenu(_ state:Frame) {
         if state.menuBar==false {
@@ -181,6 +186,10 @@ final class Overlay: NSObject, NSApplicationDelegate {
         playItem.title=track.playing ? "Pause" : "Play"
         shuffleItem.state=track.shuffle ? .on : .off
         statusItem?.button?.toolTip="\(track.name) — \(track.artist)"
+    }
+    lazy var miniPlayer=MiniPlayer { [weak self] name,position in
+        if let position { self?.emit(["command":name,"position":position]) }
+        else { self?.command(name) }
     }
     let allowed = Set(["com.apple.Terminal","com.googlecode.iterm2","com.mitchellh.ghostty","net.kovidgoyal.kitty","org.wezfurlong.wezterm"])
 
@@ -219,6 +228,8 @@ final class Overlay: NSObject, NSApplicationDelegate {
         updateMedia(update)
         let value=UInt32(update.background.dropFirst(),radix:16) ?? 0
         photo.backdrop=NSColor(srgbRed:Double((value>>16)&255)/255,green:Double((value>>8)&255)/255,blue:Double(value&255)/255,alpha:1)
+        let miniColor=UInt32((update.playbackBackground ?? update.background).dropFirst(),radix:16) ?? 0
+        miniPlayer.update(update,image:playbackImage,background:NSColor(srgbRed:Double((miniColor>>16)&255)/255,green:Double((miniColor>>8)&255)/255,blue:Double(miniColor&255)/255,alpha:1))
         frame=update; updated=Date(); tick()
     }
     func report(_ visible: Bool, _ reason: String) {
@@ -230,6 +241,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
     func hide(_ reason: String) { panel.orderOut(nil); report(false,reason) }
     func tick() {
         if photo.previous != nil {photo.needsDisplay=true}
+        miniPlayer.tick(fresh:Date().timeIntervalSince(updated)<2)
         guard kill(parent,0)==0 else { NSApp.terminate(nil); return }
         guard let frame,frame.enabled,Date().timeIntervalSince(updated)<1.5,photo.image != nil else { hide("idle");return }
         guard Date().timeIntervalSince(geometryChanged)>0.15 else { hide("settling");return }
@@ -316,6 +328,31 @@ if CommandLine.arguments.contains("--render-test"),CommandLine.arguments.count==
     guard let png=bitmap.representation(using:.png,properties:[:]) else { exit(1) }
     try png.write(to:URL(fileURLWithPath:CommandLine.arguments[3]))
     print("Native artwork rendered")
+    exit(0)
+}
+if CommandLine.arguments.contains("--mini-test") {
+    _ = NSApplication.shared
+    var events:[String]=[]
+    let mini=MiniPlayer {name,position in events.append(name == "seek" ? "seek:\(Int(position ?? 0))" : name)}
+    let track=NowPlaying(id:"test",name:"Go To Town",artist:"Doja Cat",album:"Amala",duration:217,position:15,playing:true,volume:65,shuffle:false)
+    let frame=Frame(key:"test",enabled:false,token:"test",cover:CellRect(x:0,y:0,width:0,height:0),anchor:Anchor(text:"",x:0,y:0),background:"#171010",track:track,mini:true)
+    let testImage=CommandLine.arguments.count==4 ? NSImage(contentsOfFile:CommandLine.arguments[2]) : NSImage(size:NSSize(width:100,height:100))
+    mini.update(frame,image:testImage,background:NSColor(srgbRed:0.09,green:0.06,blue:0.06,alpha:1))
+    mini.window.orderOut(nil)
+    precondition(mini.title.stringValue=="Go To Town" && mini.album.stringValue=="Amala")
+    precondition(mini.elapsed.stringValue=="0:15" && mini.duration.stringValue=="3:37")
+    for button in mini.buttons {mini.transport(button)}
+    mini.slider.doubleValue=42;mini.seek(mini.slider)
+    precondition(events==["previous","toggle","next","seek:42"])
+    mini.slider.doubleValue=15
+    mini.content.layoutSubtreeIfNeeded()
+    guard let bitmap=mini.content.bitmapImageRepForCachingDisplay(in:mini.content.bounds) else {exit(1)}
+    mini.content.cacheDisplay(in:mini.content.bounds,to:bitmap)
+    guard let png=bitmap.representation(using:.png,properties:[:]) else {exit(1)}
+    if CommandLine.arguments.count==4 {try png.write(to:URL(fileURLWithPath:CommandLine.arguments[3]))}
+    mini.tick(fresh:false);precondition(!mini.slider.isEnabled && mini.buttons.allSatisfy {!$0.isEnabled})
+    _ = mini.windowShouldClose(mini.window);precondition(events.last=="hide-mini")
+    print("Mini player rendering, metadata, transport, seeking, stale state, and close tests passed")
     exit(0)
 }
 let app=NSApplication.shared

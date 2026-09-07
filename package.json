@@ -12,7 +12,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:overlay": "sh scripts/build-overlay.sh",
-    "test:overlay": "\"native/Spotterminal Artwork.app/Contents/MacOS/SpotterminalArtwork\" --self-test"
+    "test:overlay": "\"native/Spotterminal Artwork.app/Contents/MacOS/SpotterminalArtwork\" --self-test && \"native/Spotterminal Artwork.app/Contents/MacOS/SpotterminalArtwork\" --mini-test"
   },
   "dependencies": {
     "@opentui/core": "0.5.10",

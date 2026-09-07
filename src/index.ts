@@ -10,7 +10,8 @@ import {CommandPalette} from './palette';
 import {LyricsLibrary} from './lyrics';
 import {FocusTimer} from './focus';
 const args=process.argv.slice(2);
-if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen] [--transitions]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\n/: commands | P: postcard | H: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
+if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen] [--transitions] [--mini] [--focus minutes] [--lyrics file.lrc]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\n/: commands | M: mini player | F: focus | L/I: lyrics/import | P: postcard | H: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
+if(args.includes('--mini')){const {runMini}=await import('./mini');await runMini(args);}
 if(args.includes('--lyrics')&&(!args[args.indexOf('--lyrics')+1]||args[args.indexOf('--lyrics')+1].startsWith('--'))){console.error('--lyrics needs a path to an .lrc file');process.exit(1);}
 const demo=args.includes('--demo');
 if(!demo&&process.platform!=='darwin'){console.error('Live playback requires Spotify for macOS. Try spotterminal --demo.');process.exit(1);}
@@ -77,7 +78,7 @@ async function savePostcard(){
 }
 let queue=Promise.resolve();
 const action=(c:Command)=>{queue=queue.then(async()=>{if(closed)return;try{await backend.command(c);await poll();}catch(e){status=e instanceof Error?e.message:String(e);}});};
-const overlay=new ArtworkOverlay(true,event=>{if(event.command==='quit')quit();else if(event.command==='seek'){queue=queue.then(async()=>{try{await backend.seek(event.position);await poll();}catch(e){status=String(e);}});}else action(event.command);},{overlay:!args.includes('--no-overlay'),menuBar:!args.includes('--no-menubar'),systemMedia:args.includes('--system-media')&&!demo});
+const overlay=new ArtworkOverlay(true,event=>{if(event.command==='quit')quit();else if(event.command==='mini')overlay.setMini(true);else if(event.command==='hide-mini')overlay.setMini(false);else if(event.command==='seek'){queue=queue.then(async()=>{try{await backend.seek(event.position);await poll();}catch(e){status=String(e);}});}else action(event.command);},{overlay:!args.includes('--no-overlay'),menuBar:!args.includes('--no-menubar'),systemMedia:args.includes('--system-media')&&!demo});
 renderer.setTerminalTitle(overlay.token);
 const ui=new PlayerUI(renderer,action,overlay);
 ui.fullscreen=args.includes('--fullscreen');ui.transitions=args.includes('--transitions');
@@ -100,6 +101,7 @@ const palette=new CommandPalette([
   {id:'louder',label:'Volume up',run:()=>action('louder')},
   {id:'quieter',label:'Volume down',run:()=>action('quieter')},
   {id:'shuffle',label:'Toggle shuffle',run:()=>action('shuffle')},
+  {id:'mini',label:'Toggle desktop mini player',run:()=>overlay.setMini(!overlay.mini)},
   {id:'fullscreen',label:'Toggle fullscreen artwork',run:()=>ui.toggleFullscreen()},
   {id:'history',label:'Browse listening history',run:()=>browseHistory()},
   {id:'postcard',label:'Create a listening postcard',keywords:'export image caption',run:openPostcard},
@@ -148,6 +150,7 @@ renderer.keyInput.on('keypress',key=>{
     refreshPalette();return;
   }
   if(key.name==='/'||key.sequence==='/'){paletteOpen=true;palette.edit('');refreshPalette();return;}
+  if(key.name==='m'){overlay.setMini(!overlay.mini);return;}
   if(key.name==='f'){openFocus();return;}
   if(key.name==='l'){ui.lyricsOpen=!ui.lyricsOpen;return;}
   if(key.name==='i'){openLyricsImport();return;}

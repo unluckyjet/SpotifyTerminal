@@ -5,7 +5,10 @@ app_dir="$project_dir/native/Spotterminal Artwork.app"
 mkdir -p "$app_dir/Contents/MacOS"
 module_cache="${TMPDIR:-/tmp}/spotterminal-swift-cache"
 mkdir -p "$module_cache"
-swiftc -O -module-cache-path "$module_cache" "$project_dir/native/ArtworkOverlay.swift" -o "$app_dir/Contents/MacOS/SpotterminalArtwork" -framework AppKit -framework ApplicationServices -framework MediaPlayer
+source_dir=$(mktemp -d "${TMPDIR:-/tmp}/spotterminal-build.XXXXXX")
+trap 'rm -rf "$source_dir"' EXIT
+cp "$project_dir/native/ArtworkOverlay.swift" "$source_dir/main.swift"
+swiftc -O -module-cache-path "$module_cache" "$source_dir/main.swift" "$project_dir/native/MiniPlayer.swift" -o "$app_dir/Contents/MacOS/SpotterminalArtwork" -framework AppKit -framework ApplicationServices -framework MediaPlayer
 cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

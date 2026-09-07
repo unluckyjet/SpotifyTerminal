@@ -2,6 +2,7 @@ import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import type {Artwork} from './cover';
 import type {Track} from './spotify';
+import {albumTheme} from './theme';
 import {nativeCommand,type NativeCommand} from './native-commands';
 
 export type OverlayLayout = {
@@ -24,13 +25,16 @@ export class ArtworkOverlay {
   private reply:Reply={visible:false,reason:'starting',key:''};
   private failure='';
   private transitions=false;
+  setMini(value:boolean){this.options.mini=value;this.lastSent=0;}
+  get mini(){return this.options.mini===true;}
+  get running(){return this.process!==null&&!this.stopped;}
   setTransitions(value:boolean){this.transitions=value;}
   private track?:Track;
   private playbackArtwork?:Artwork;
   private lastPlaybackImage?:Buffer;
   setTrack(track:Track,artwork?:Artwork){this.track=track;this.playbackArtwork=artwork;}
 
-  constructor(enabled:boolean,private onCommand?:(command:NativeCommand)=>void,private options:{overlay?:boolean;menuBar?:boolean;systemMedia?:boolean}={}){
+  constructor(enabled:boolean,private onCommand?:(command:NativeCommand)=>void,private options:{overlay?:boolean;menuBar?:boolean;systemMedia?:boolean;mini?:boolean}={}){
     if(!enabled||process.platform!=='darwin'){this.failure='disabled';return;}
     if(!existsSync(overlayExecutable)){this.failure='missing';return;}
     try{
@@ -67,7 +71,7 @@ export class ArtworkOverlay {
       const empty={cover:{x:0,y:0,width:0,height:0},anchor:{text:'',x:0,y:0},background:'#000000'};
       const playbackImage=this.playbackArtwork?.encoded;
       const changedPlayback=this.lastPlaybackImage!==playbackImage;this.lastPlaybackImage=playbackImage;
-      const payload={transitions:this.transitions,clearPlaybackImage:!playbackImage,...(changedPlayback&&playbackImage?{playbackImage:playbackImage.toString('base64')}:{ }),key,enabled,token:this.token,track:this.track,systemMedia:this.options.systemMedia===true,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
+      const payload={playbackBackground:albumTheme(this.playbackArtwork?.palette).bg,mini:this.mini,transitions:this.transitions,clearPlaybackImage:!playbackImage,...(changedPlayback&&playbackImage?{playbackImage:playbackImage.toString('base64')}:{ }),key,enabled,token:this.token,track:this.track,systemMedia:this.options.systemMedia===true,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
       try{const stdin=this.process.stdin;if(stdin&&typeof stdin!=='number'){stdin.write(JSON.stringify(payload)+'\n');stdin.flush();}}catch{this.failure='stopped';}
     }
     return this.reply.visible&&this.reply.key===key&&now-this.lastReply<1500;
