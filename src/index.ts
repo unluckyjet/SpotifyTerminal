@@ -6,8 +6,9 @@ import type {Artwork} from './cover';
 import {ArtworkOverlay} from './overlay';
 import {ListeningHistory} from './history';
 import {exportPostcard} from './postcard';
+import {CommandPalette} from './palette';
 const args=process.argv.slice(2);
-if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen] [--transitions]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\nP: postcard | H: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
+if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen] [--transitions]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\n/: commands | P: postcard | H: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
 const demo=args.includes('--demo');
 if(!demo&&process.platform!=='darwin'){console.error('Live playback requires Spotify for macOS. Try spotterminal --demo.');process.exit(1);}
 const history=new ListeningHistory();await history.load();
@@ -65,7 +66,55 @@ ui.fullscreen=args.includes('--fullscreen');ui.transitions=args.includes('--tran
 const animation=setInterval(()=>{if(!closed){overlay.setTrack(track,cover);if(!demo)void history.record(track,cover).catch(()=>{status='Could not save listening history';});ui.draw(ui.gallery&&historyTrack?historyTrack:track,ui.gallery?historyCover:cover,demo,status);}},100);
 const polling=setInterval(()=>void poll(),1000);
 function quit(){closed=true;overlay.close();clearInterval(animation);clearInterval(polling);renderer.destroy();process.exit(0);}
-renderer.keyInput.on('keypress',key=>{ui.interact();if(key.ctrl&&key.name==='c')return quit();if(captionMode){if(key.name==='escape'){captionMode=false;ui.dialog=undefined;}else if(key.name==='return')void savePostcard();else if(key.name==='backspace'){caption=Array.from(caption).slice(0,-1).join('');}else if(!key.ctrl&&!key.meta&&key.sequence&&!/[\x00-\x1f\x7f]/.test(key.sequence))caption=(caption+key.sequence).slice(0,160);if(ui.dialog)ui.dialog.input=caption;return;}if(key.name==='p'){openPostcard();return;}if(key.name==='t'){ui.transitions=!ui.transitions;status=`Transitions ${ui.transitions?'on':'off'}`;return;}if(key.name==='h'){if(ui.gallery){ui.gallery=undefined;historyVersion++;}else void browseHistory();return;}if(ui.gallery&&(key.name==='left'||key.name==='right')){void browseHistory(key.name==='right'?1:-1);return;}if(ui.gallery&&key.name==='escape'){ui.gallery=undefined;historyVersion++;return;}if(key.name==='tab'){ui.toggleFullscreen();return;}if(key.name==='q'||(key.ctrl&&key.name==='c'))return quit();if(key.name==='o'){overlay.requestAccess();return;}const keys:Record<string,Command>={space:'toggle',right:'next',left:'previous',up:'forward',down:'back',s:'shuffle','+':'louder','=':'louder','-':'quieter'};const c=keys[key.name]??keys[key.sequence];if(c)action(c);});
+let paletteOpen=false;
+const palette=new CommandPalette([
+  {id:'toggle',label:'Play / pause',run:()=>action('toggle')},
+  {id:'next',label:'Next track',keywords:'skip',run:()=>action('next')},
+  {id:'previous',label:'Previous track',keywords:'back',run:()=>action('previous')},
+  {id:'louder',label:'Volume up',run:()=>action('louder')},
+  {id:'quieter',label:'Volume down',run:()=>action('quieter')},
+  {id:'shuffle',label:'Toggle shuffle',run:()=>action('shuffle')},
+  {id:'fullscreen',label:'Toggle fullscreen artwork',run:()=>ui.toggleFullscreen()},
+  {id:'history',label:'Browse listening history',run:()=>browseHistory()},
+  {id:'postcard',label:'Create a listening postcard',keywords:'export image caption',run:openPostcard},
+  {id:'transitions',label:'Toggle cover transitions',keywords:'animation fade',run:()=>{ui.transitions=!ui.transitions;}},
+  {id:'overlay',label:'Enable native artwork overlay',keywords:'accessibility',run:()=>overlay.requestAccess()},
+  {id:'quit',label:'Quit Spotterminal',run:quit},
+]);
+function refreshPalette(){const view=palette.view(Math.max(1,Math.min(8,renderer.height-12)));ui.dialog={title:'Commands',input:palette.query,...view,footer:view.lines.length?'↑ ↓ choose · Enter run · Escape close':'No matching commands · Escape close'};}
+renderer.keyInput.on('keypress',key=>{
+  ui.interact();
+  if(key.ctrl&&key.name==='c')return quit();
+  const printable=!key.ctrl&&!key.meta&&key.sequence&&!/[\x00-\x1f\x7f]/.test(key.sequence);
+  if(captionMode){
+    if(key.name==='escape'){captionMode=false;ui.dialog=undefined;}
+    else if(key.name==='return')void savePostcard();
+    else if(key.name==='backspace')caption=Array.from(caption).slice(0,-1).join('');
+    else if(printable)caption=(caption+key.sequence).slice(0,160);
+    if(ui.dialog)ui.dialog.input=caption;
+    return;
+  }
+  if(paletteOpen){
+    if(key.name==='escape'){paletteOpen=false;ui.dialog=undefined;return;}
+    if(key.name==='return'){const selected=palette.choose();paletteOpen=false;ui.dialog=undefined;void selected?.run();return;}
+    if(key.name==='up')palette.move(-1);
+    else if(key.name==='down')palette.move(1);
+    else if(key.name==='backspace')palette.edit(Array.from(palette.query).slice(0,-1).join(''));
+    else if(printable)palette.edit((palette.query+key.sequence).slice(0,100));
+    refreshPalette();return;
+  }
+  if(key.name==='/'||key.sequence==='/'){paletteOpen=true;palette.edit('');refreshPalette();return;}
+  if(key.name==='p'){openPostcard();return;}
+  if(key.name==='t'){ui.transitions=!ui.transitions;status=`Transitions ${ui.transitions?'on':'off'}`;return;}
+  if(key.name==='h'){if(ui.gallery){ui.gallery=undefined;historyVersion++;}else void browseHistory();return;}
+  if(ui.gallery&&(key.name==='left'||key.name==='right')){void browseHistory(key.name==='right'?1:-1);return;}
+  if(ui.gallery&&key.name==='escape'){ui.gallery=undefined;historyVersion++;return;}
+  if(key.name==='tab'){ui.toggleFullscreen();return;}
+  if(key.name==='q')return quit();
+  if(key.name==='o'){overlay.requestAccess();return;}
+  const keys:Record<string,Command>={space:'toggle',right:'next',left:'previous',up:'forward',down:'back',s:'shuffle','+':'louder','=':'louder','-':'quieter'};
+  const c=keys[key.name]??keys[key.sequence];if(c)action(c);
+});
 process.on('SIGTERM',quit);process.on('SIGINT',quit);
 ui.draw(track,cover,demo,status);
 if(!args.includes('--no-autoplay'))action('play');else void poll();

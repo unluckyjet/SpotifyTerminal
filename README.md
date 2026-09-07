@@ -33,6 +33,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | Tab | Toggle fullscreen artwork |
 | H | Browse local listening history |
 | P | Export a listening postcard |
+| / | Search the command palette |
 | T | Toggle optional cover/color transitions |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |
@@ -75,6 +76,10 @@ Transitions are off by default. Press **T** or use `--transitions` for a short c
 ## Listening postcards
 
 Press **P**, optionally type a caption, and press **Enter** to save a 1200 × 1600 PNG with the original album cover, song, artist, album, and cover-derived colors. Files are saved in the local data directory’s `postcards` folder. Nothing is uploaded or sent. **Escape** cancels.
+
+## Command palette
+
+Press **/** and type to filter playback and appearance commands. Use **Up/Down** and **Enter** to run a command, or **Escape** to dismiss it. Typing in the palette or caption editor does not trigger playback shortcuts.
 
 ## Development
 
