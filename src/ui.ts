@@ -5,6 +5,7 @@ import {CoverRenderable, type Artwork} from './cover';
 import type {ArtworkOverlay,OverlayLayout} from './overlay';
 export const clock=(s:number)=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.floor(Math.max(0,s))%60).padStart(2,'0')}`;
 type Cell={c:string;f:string;b:string};
+export type Dialog={title:string;input?:string;lines?:string[];footer:string;selected?:number};
 export class PlayerUI {
   private themePixels?:Buffer;
   private theme=albumTheme();
@@ -17,6 +18,7 @@ export class PlayerUI {
   private fromTheme=albumTheme();
   fullscreen=false;
   gallery?:{index:number;total:number};
+  dialog?:Dialog;
   lastInteraction=Date.now();
   interact(){this.lastInteraction=Date.now();}
   toggleFullscreen(){this.fullscreen=!this.fullscreen;this.interact();}
@@ -91,6 +93,16 @@ export class PlayerUI {
       if(showControls){button(center-spacing-1,' ← ','previous');button(center-1,track.playing?' Ⅱ ':' ▶ ','toggle');button(center+spacing-1,' → ','next');}
       const note=this.gallery?`History ${this.gallery.index+1}/${this.gallery.total} · ← → browse · H back`:(status||this.overlay?.note|| (demo?'demo · no audio':''));
       if(note)put(left,Math.min(H-1,controlY+2),note.replace(/[\r\n\x1b]/g,' ').slice(0,width),colors.muted);
+    }
+    if(this.dialog){
+      this.cover.visible=false;this.previousCover.visible=false;layout=undefined;this.hits=[];
+      for(const row of grid)for(const cell of row){cell.c=' ';cell.f=colors.text;cell.b=colors.bg;}
+      const width=Math.min(70,W-4),left=Math.max(1,Math.floor((W-width)/2)),top=Math.max(1,Math.floor((H-12)/2));
+      put(left,top,this.dialog.title.slice(0,width),colors.accent);
+      if(this.dialog.input!==undefined)put(left,top+2,('› '+this.dialog.input+'▏').slice(-width));
+      const entries=this.dialog.lines??[];
+      entries.slice(0,Math.max(0,H-top-7)).forEach((line,i)=>put(left,top+4+i,((i===this.dialog!.selected?'› ':'  ')+line).slice(0,width),i===this.dialog!.selected?colors.accent:colors.text));
+      put(left,Math.min(H-2,top+Math.max(8,entries.length+5)),this.dialog.footer.slice(0,width),colors.muted);
     }
     // Keep the fallback under the native panel until it acknowledges this exact
     // source and layout; it also stays available while the app is in background.

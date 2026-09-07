@@ -32,6 +32,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | Space | Play / pause |
 | Tab | Toggle fullscreen artwork |
 | H | Browse local listening history |
+| P | Export a listening postcard |
 | T | Toggle optional cover/color transitions |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |
@@ -70,6 +71,10 @@ Press **H** to browse the most recent 200 distinct tracks with **Left/Right**. P
 ## Transitions
 
 Transitions are off by default. Press **T** or use `--transitions` for a short crossfade between album covers and their color themes. The native artwork overlay uses the same setting.
+
+## Listening postcards
+
+Press **P**, optionally type a caption, and press **Enter** to save a 1200 × 1600 PNG with the original album cover, song, artist, album, and cover-derived colors. Files are saved in the local data directory’s `postcards` folder. Nothing is uploaded or sent. **Escape** cancels.
 
 ## Development
 
