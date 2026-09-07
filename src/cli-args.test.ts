@@ -1,0 +1,22 @@
+import {test, expect} from 'bun:test';
+import {parseCliOptions} from './cli-args';
+test('parseCliOptions reads shipped flags including new ones', () => {
+  const d = parseCliOptions(['--demo', '--no-autoplay', '--repeat', 'track', '--sleep', '30', '--night', '--vim', '--once', '--json', '--high-contrast', '--mono', '--compact', '--pomodoro', '--notify', '--status-file', '--volume', '40']);
+  expect(d.demo).toBe(true);
+  expect(d.autoplay).toBe(false);
+  expect(d.repeat).toBe('track');
+  expect(d.sleep).toBe(30);
+  expect(d.night).toBe(true);
+  expect(d.vim).toBe(true);
+  expect(d.once).toBe(true);
+  expect(d.json).toBe(true);
+  expect(d.highContrast).toBe(true);
+  expect(d.mono).toBe(true);
+  expect(d.compact).toBe(true);
+  expect(d.pomodoro).toBe(true);
+  expect(d.notify).toBe(true);
+  expect(d.statusFile).toBe(true);
+  expect(d.volume).toBe(40);
+  expect(parseCliOptions([]).overlay).toBe(true);
+  expect(() => parseCliOptions(['--repeat', 'nope'])).toThrow();
+});
