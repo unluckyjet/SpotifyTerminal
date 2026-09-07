@@ -5,7 +5,7 @@ import {PlayerUI} from './ui';
 import type {Artwork} from './cover';
 import {ArtworkOverlay} from './overlay';
 const args=process.argv.slice(2);
-if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\nS: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
+if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\nS: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
 const demo=args.includes('--demo');
 if(!demo&&process.platform!=='darwin'){console.error('Live playback requires Spotify for macOS. Try spotterminal --demo.');process.exit(1);}
 const backend=demo?new Demo():new Spotify();
@@ -31,7 +31,7 @@ async function artwork(url:string){
 async function poll(){if(busy||closed)return;busy=true;try{track=await backend.read();status='';void artwork(track.artwork);}catch(e){status=e instanceof Error?e.message:String(e);track.playing=false;}finally{busy=false;}}
 let queue=Promise.resolve();
 const action=(c:Command)=>{queue=queue.then(async()=>{if(closed)return;try{await backend.command(c);await poll();}catch(e){status=e instanceof Error?e.message:String(e);}});};
-const overlay=new ArtworkOverlay(true,event=>{if(event.command==='quit')quit();else if(event.command!=='seek')action(event.command);},{overlay:!args.includes('--no-overlay'),menuBar:!args.includes('--no-menubar')});
+const overlay=new ArtworkOverlay(true,event=>{if(event.command==='quit')quit();else if(event.command==='seek'){queue=queue.then(async()=>{try{await backend.seek(event.position);await poll();}catch(e){status=String(e);}});}else action(event.command);},{overlay:!args.includes('--no-overlay'),menuBar:!args.includes('--no-menubar'),systemMedia:args.includes('--system-media')&&!demo});
 renderer.setTerminalTitle(overlay.token);
 const ui=new PlayerUI(renderer,action,overlay);
 const animation=setInterval(()=>{if(!closed){overlay.setTrack(track);ui.draw(track,cover,demo,status);}},100);

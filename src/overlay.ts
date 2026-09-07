@@ -26,7 +26,7 @@ export class ArtworkOverlay {
   private track?:Track;
   setTrack(track:Track){this.track=track;}
 
-  constructor(enabled:boolean,private onCommand?:(command:NativeCommand)=>void,private options:{overlay?:boolean;menuBar?:boolean}={}){
+  constructor(enabled:boolean,private onCommand?:(command:NativeCommand)=>void,private options:{overlay?:boolean;menuBar?:boolean;systemMedia?:boolean}={}){
     if(!enabled||process.platform!=='darwin'){this.failure='disabled';return;}
     if(!existsSync(overlayExecutable)){this.failure='missing';return;}
     try{
@@ -61,7 +61,7 @@ export class ArtworkOverlay {
     if(key!==this.lastKey||now-this.lastSent>400){
       this.lastKey=key;this.lastSent=now;
       const empty={cover:{x:0,y:0,width:0,height:0},anchor:{text:'',x:0,y:0},background:'#000000'};
-      const payload={key,enabled,token:this.token,track:this.track,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
+      const payload={key,enabled,token:this.token,track:this.track,systemMedia:this.options.systemMedia===true,menuBar:this.options.menuBar!==false,clearImage:!artwork,...(layout??empty),...(changedImage&&artwork?{image:artwork.encoded.toString('base64')}:{})};
       try{const stdin=this.process.stdin;if(stdin&&typeof stdin!=='number'){stdin.write(JSON.stringify(payload)+'\n');stdin.flush();}}catch{this.failure='stopped';}
     }
     return this.reply.visible&&this.reply.key===key&&now-this.lastReply<1500;

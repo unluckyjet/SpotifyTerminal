@@ -6,6 +6,10 @@ A Spotify desktop remote for macOS, built with Anomaly's OpenTUI. Centered song,
 
 While Spotterminal is running, its music-note icon appears in the macOS menu bar. Open it for current track details, play/pause, previous/next, shuffle, volume, and quit. These controls work without Accessibility permission. The native helper must be built (`npm run build:overlay`). Use `--no-menubar` to hide the icon; `--no-overlay` only disables the artwork overlay.
 
+## System media controls
+
+Run `spotterminal --system-media` to publish the current title, artist, album, artwork, progress, and playback state through macOS Now Playing, with play/pause, skip, and scrub controls routed to Spotify. This uses the public MediaPlayer API. macOS decides whether this session appears in Control Center, media-key controls, or a lock-screen surface; lock-screen presentation is not guaranteed. This mode is optional because Spotify already publishes its own system media session. It is disabled in silent demo mode.
+
 ## Run
 
 ```sh

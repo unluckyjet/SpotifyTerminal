@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import MediaPlayer
 
 struct CellRect: Codable { var x: Double; var y: Double; var width: Double; var height: Double }
 struct Anchor: Codable { var text: String; var x: Double; var y: Double }
@@ -18,6 +19,7 @@ struct Frame: Codable {
     var track: NowPlaying? = nil
     var menuBar: Bool? = nil
     var clearImage: Bool? = nil
+    var systemMedia: Bool? = nil
 }
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -76,6 +78,53 @@ final class Overlay: NSObject, NSApplicationDelegate {
     var updated = Date.distantPast
     var geometryChanged = Date.distantPast
     let parent: pid_t = getppid()
+    var remoteTargets:[(MPRemoteCommand,Any)]=[]
+    var mediaActive=false
+    var lastMediaUpdate=Date.distantPast
+    var mediaIdentity=""
+    func configureMedia() {
+        let center=MPRemoteCommandCenter.shared()
+        for (remote,name) in [(center.playCommand,"play"),(center.pauseCommand,"pause"),(center.togglePlayPauseCommand,"toggle"),(center.nextTrackCommand,"next"),(center.previousTrackCommand,"previous")] {
+            remote.isEnabled=true
+            let target=remote.addTarget { [weak self] _ in
+                guard let self,self.frame?.systemMedia==true,Date().timeIntervalSince(self.updated)<2 else { return .commandFailed }
+                self.command(name);return .success
+            }
+            remoteTargets.append((remote,target))
+        }
+        center.changePlaybackPositionCommand.isEnabled=true
+        let remote=center.changePlaybackPositionCommand
+        let target=remote.addTarget { [weak self] event in
+            guard let self,self.frame?.systemMedia==true,Date().timeIntervalSince(self.updated)<2,
+                  let event=event as? MPChangePlaybackPositionCommandEvent,event.positionTime.isFinite,event.positionTime>=0 else { return .commandFailed }
+            if let data=try? JSONSerialization.data(withJSONObject:["command":"seek","position":event.positionTime]),let text=String(data:data,encoding:.utf8){print(text);fflush(stdout)}
+            return .success
+        }
+        remoteTargets.append((remote,target));mediaActive=true
+    }
+    func clearMedia() {
+        for (command,target) in remoteTargets {command.removeTarget(target);command.isEnabled=false}
+        remoteTargets=[]
+        if mediaActive {MPNowPlayingInfoCenter.default().nowPlayingInfo=nil;MPNowPlayingInfoCenter.default().playbackState = .stopped}
+        mediaActive=false;mediaIdentity=""
+    }
+    func updateMedia(_ state:Frame) {
+        guard state.systemMedia==true,let track=state.track,!track.id.isEmpty else {clearMedia();return}
+        if !mediaActive {configureMedia()}
+        let identity="\(track.id):\(track.playing):\(state.image != nil)"
+        guard identity != mediaIdentity || Date().timeIntervalSince(lastMediaUpdate)>=1 else {return}
+        mediaIdentity=identity;lastMediaUpdate=Date()
+        var info:[String:Any]=[
+            MPMediaItemPropertyTitle:track.name,MPMediaItemPropertyArtist:track.artist,MPMediaItemPropertyAlbumTitle:track.album,
+            MPMediaItemPropertyPlaybackDuration:track.duration,MPNowPlayingInfoPropertyElapsedPlaybackTime:track.position,
+            MPNowPlayingInfoPropertyPlaybackRate:track.playing ? 1.0 : 0.0,MPNowPlayingInfoPropertyDefaultPlaybackRate:1.0,
+            MPNowPlayingInfoPropertyExternalContentIdentifier:track.id
+        ]
+        if let image=photo.image {info[MPMediaItemPropertyArtwork]=MPMediaItemArtwork(boundsSize:image.size) { _ in image }}
+        let center=MPNowPlayingInfoCenter.default();center.nowPlayingInfo=info
+        center.playbackState=track.playing ? .playing : .paused
+    }
+    func applicationWillTerminate(_ notification:Notification){clearMedia()}
     var statusItem: NSStatusItem?
     let statusMenu=NSMenu()
     let titleItem=NSMenuItem(title:"Spotterminal",action:nil,keyEquivalent:"")
@@ -151,6 +200,7 @@ final class Overlay: NSObject, NSApplicationDelegate {
 
         if update.clearImage==true { photo.image=nil }
         updateMenu(update)
+        updateMedia(update)
         let value=UInt32(update.background.dropFirst(),radix:16) ?? 0
         photo.backdrop=NSColor(srgbRed:Double((value>>16)&255)/255,green:Double((value>>8)&255)/255,blue:Double(value&255)/255,alpha:1)
         frame=update; updated=Date(); tick()

@@ -17,6 +17,11 @@ async function osa(script: string, jxa = false) {
   } finally { clearTimeout(timeout); }
 }
 export class Spotify {
+  async seek(position:number){
+    if(!Number.isFinite(position)||position<0)throw new Error('Invalid playback position');
+    const track=await this.read();
+    return osa(`tell application "Spotify" to set player position to ${Math.min(position,track.duration).toFixed(3)}`);
+  }
   async command(command: Command) {
     if(command === 'back') return osa('tell application "Spotify"\nset player position to my clampPosition(player position - 10)\nend tell\non clampPosition(p)\nif p < 0 then return 0\nreturn p\nend clampPosition');
     return osa(`tell application "Spotify" to ${commands[command]}`);
@@ -28,6 +33,7 @@ export class Spotify {
 export class Demo {
   track: Track = {id:'demo',name:'Go To Town',artist:'Doja Cat',album:'Amala • Demo tape',artwork:'',duration:217,position:15,playing:true,volume:65,shuffle:false};
   last = Date.now();
+  async seek(position:number){if(!Number.isFinite(position)||position<0)throw new Error('Invalid playback position');this.track.position=Math.min(position,this.track.duration);this.last=Date.now();}
   async read() { const now=Date.now(); if(this.track.playing) this.track.position=(this.track.position+(now-this.last)/1000)%this.track.duration; this.last=now; return {...this.track}; }
   async command(c: Command) { await this.read(); if(c==='toggle') this.track.playing=!this.track.playing; if(c==='play') this.track.playing=true; if(c==='pause') this.track.playing=false; if(c==='shuffle') this.track.shuffle=!this.track.shuffle; if(c==='next'||c==='previous') {this.track.name=this.track.name==='Go To Town'?'Roll With Us':'Go To Town';this.track.position=0;} if(c==='forward'||c==='back') this.track.position=Math.max(0,Math.min(this.track.duration,this.track.position+(c==='forward'?10:-10))); if(c==='louder'||c==='quieter')this.track.volume=Math.max(0,Math.min(100,this.track.volume+(c==='louder'?5:-5))); }
 }
