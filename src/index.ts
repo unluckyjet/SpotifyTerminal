@@ -7,10 +7,15 @@ import {ArtworkOverlay} from './overlay';
 import {ListeningHistory} from './history';
 import {exportPostcard} from './postcard';
 import {CommandPalette} from './palette';
+import {LyricsLibrary} from './lyrics';
 const args=process.argv.slice(2);
 if(args.includes('--help')){console.log('spotterminal [--demo] [--no-autoplay] [--no-overlay] [--no-menubar] [--system-media] [--fullscreen] [--transitions]\nSpace: play/pause | Left/Right: skip | Up/Down: seek 10s\n/: commands | P: postcard | H: history | Tab: fullscreen | S: shuffle | +/-: volume | O: enable overlay | Q: quit (music continues)');process.exit(0);}
+if(args.includes('--lyrics')&&(!args[args.indexOf('--lyrics')+1]||args[args.indexOf('--lyrics')+1].startsWith('--'))){console.error('--lyrics needs a path to an .lrc file');process.exit(1);}
 const demo=args.includes('--demo');
 if(!demo&&process.platform!=='darwin'){console.error('Live playback requires Spotify for macOS. Try spotterminal --demo.');process.exit(1);}
+const lyricsLibrary=new LyricsLibrary();
+let lyricsTrack='',lyricsVersion=0;
+let pendingLyricsPath=args.includes('--lyrics')?args[args.indexOf('--lyrics')+1]:undefined;
 const history=new ListeningHistory();await history.load();
 const backend=demo?new Demo():new Spotify();
 const renderer=await createCliRenderer({exitOnCtrlC:false,useMouse:true});
@@ -32,7 +37,7 @@ async function artwork(url:string){
     if(url===artUrl)artUrl='';
   }
 }
-async function poll(){if(busy||closed)return;busy=true;try{track=await backend.read();status='';void artwork(track.artwork);}catch(e){status=e instanceof Error?e.message:String(e);track.playing=false;}finally{busy=false;}}
+async function poll(){if(busy||closed)return;busy=true;try{track=await backend.read();status='';void artwork(track.artwork);if(track.id!==lyricsTrack){lyricsTrack=track.id;const id=track.id,version=++lyricsVersion;ui.lyricLines=[];void lyricsLibrary.load(id).then(lines=>{if(version===lyricsVersion)ui.lyricLines=lines;});}if(pendingLyricsPath&&track.id){const path=pendingLyricsPath;pendingLyricsPath=undefined;void importLyrics(path,track.id);}}catch(e){status=e instanceof Error?e.message:String(e);track.playing=false;}finally{busy=false;}}
 let historyIndex=0,historyVersion=0,historyCover:Artwork|undefined;
 let historyTrack:Track|undefined;
 async function browseHistory(delta=0){
@@ -44,6 +49,11 @@ async function browseHistory(delta=0){
   ui.gallery={index:historyIndex,total:history.entries.length};
   const encoded=await history.cover(entry);
   if(encoded){try{const palette=await sharp(encoded).resize(32,32).removeAlpha().toColourspace('srgb').raw().toBuffer();if(version===historyVersion)historyCover={encoded,palette};}catch{status='Saved cover unavailable';}}
+}
+let lyricsImportMode=false,lyricsPathInput='',lyricsImportTrack='';
+function openLyricsImport(){lyricsImportMode=true;lyricsPathInput='';lyricsImportTrack=track.id;ui.dialog={title:'Import lyrics for '+track.name,input:'',footer:'Path to .lrc file · Enter import · Escape cancel'};}
+async function importLyrics(path:string,id:string){
+  try{const lines=await lyricsLibrary.import(id,path);if(track.id===id){lyricsVersion++;ui.lyricLines=lines;ui.lyricsOpen=true;}status='Lyrics imported';}catch(e){status=String(e);}
 }
 let captionMode=false,caption='';
 let postcardSelection:{track:Track;artwork:Artwork}|undefined;
@@ -79,6 +89,8 @@ const palette=new CommandPalette([
   {id:'postcard',label:'Create a listening postcard',keywords:'export image caption',run:openPostcard},
   {id:'transitions',label:'Toggle cover transitions',keywords:'animation fade',run:()=>{ui.transitions=!ui.transitions;}},
   {id:'overlay',label:'Enable native artwork overlay',keywords:'accessibility',run:()=>overlay.requestAccess()},
+  {id:'lyrics',label:'Toggle synchronized lyrics',run:()=>{ui.lyricsOpen=!ui.lyricsOpen;}},
+  {id:'import-lyrics',label:'Import lyrics from an LRC file',run:openLyricsImport},
   {id:'quit',label:'Quit Spotterminal',run:quit},
 ]);
 function refreshPalette(){const view=palette.view(Math.max(1,Math.min(8,renderer.height-12)));ui.dialog={title:'Commands',input:palette.query,...view,footer:view.lines.length?'↑ ↓ choose · Enter run · Escape close':'No matching commands · Escape close'};}
@@ -86,6 +98,13 @@ renderer.keyInput.on('keypress',key=>{
   ui.interact();
   if(key.ctrl&&key.name==='c')return quit();
   const printable=!key.ctrl&&!key.meta&&key.sequence&&!/[\x00-\x1f\x7f]/.test(key.sequence);
+  if(lyricsImportMode){
+    if(key.name==='escape'){lyricsImportMode=false;ui.dialog=undefined;}
+    else if(key.name==='return'){lyricsImportMode=false;ui.dialog=undefined;void importLyrics(lyricsPathInput,lyricsImportTrack);}
+    else if(key.name==='backspace')lyricsPathInput=Array.from(lyricsPathInput).slice(0,-1).join('');
+    else if(printable)lyricsPathInput=(lyricsPathInput+key.sequence).slice(0,1000);
+    if(ui.dialog)ui.dialog.input=lyricsPathInput;return;
+  }
   if(captionMode){
     if(key.name==='escape'){captionMode=false;ui.dialog=undefined;}
     else if(key.name==='return')void savePostcard();
@@ -104,6 +123,8 @@ renderer.keyInput.on('keypress',key=>{
     refreshPalette();return;
   }
   if(key.name==='/'||key.sequence==='/'){paletteOpen=true;palette.edit('');refreshPalette();return;}
+  if(key.name==='l'){ui.lyricsOpen=!ui.lyricsOpen;return;}
+  if(key.name==='i'){openLyricsImport();return;}
   if(key.name==='p'){openPostcard();return;}
   if(key.name==='t'){ui.transitions=!ui.transitions;status=`Transitions ${ui.transitions?'on':'off'}`;return;}
   if(key.name==='h'){if(ui.gallery){ui.gallery=undefined;historyVersion++;}else void browseHistory();return;}

@@ -34,6 +34,7 @@ The fallback uses **Chafa**, with full color, edge-matching characters, and no d
 | H | Browse local listening history |
 | P | Export a listening postcard |
 | / | Search the command palette |
+| L / I | Toggle lyrics / import an LRC file |
 | T | Toggle optional cover/color transitions |
 | Left / Right | Previous / next track |
 | Up / Down | Seek forward / backward 10 seconds |
@@ -80,6 +81,10 @@ Press **P**, optionally type a caption, and press **Enter** to save a 1200 × 16
 ## Command palette
 
 Press **/** and type to filter playback and appearance commands. Use **Up/Down** and **Enter** to run a command, or **Escape** to dismiss it. Typing in the palette or caption editor does not trigger playback shortcuts.
+
+## Synchronized lyrics
+
+Press **I** to import a local `.lrc` file for the current song, then **L** to toggle lyrics. You can also launch with `--lyrics /path/to/song.lrc`; it attaches to the first available track. Imported lyrics are stored by Spotify track ID and restored when you play that track again. Wide windows show lyrics beside the cover; narrow windows use the artwork area. Timing follows Spotify’s position, including seeking. Positive LRC offset tags advance the lyrics. Lyrics are read from files you supply; the app does not fetch lyrics online.
 
 ## Development
 
